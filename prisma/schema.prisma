@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DraftStatus {
+  DRAFT
+  QUEUED
+  SENT
+  FAILED
+}
+
+enum IngestStatus {
+  SUCCESS
+  FAILED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String?
+  emailVerified DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  sessions     Session[]
+  accounts     Account[]
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Recipient {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model RecipientSync {
+  id        String   @id @default(cuid())
+  syncedAt  DateTime @default(now())
+  status    String
+  message   String?
+}
+
+model ContextEntry {
+  id        String   @id @default(cuid())
+  month     String
+  context1  String
+  context2  String
+  context3  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  drafts    Draft[]
+
+  @@unique([month])
+}
+
+model Draft {
+  id           String      @id @default(cuid())
+  month        String
+  html         String
+  status       DraftStatus @default(DRAFT)
+  sourceNotes  String?
+  contextId    String?
+  contextEntry ContextEntry? @relation(fields: [contextId], references: [id])
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  sendSchedule SendSchedule?
+}
+
+model SendSchedule {
+  id          String   @id @default(cuid())
+  draftId     String   @unique
+  scheduledAt DateTime
+  status      String
+  brevoId     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  draft       Draft    @relation(fields: [draftId], references: [id])
+}
+
+model IngestRun {
+  id         String      @id @default(cuid())
+  month      String
+  status     IngestStatus
+  startedAt  DateTime    @default(now())
+  finishedAt DateTime?
+  message    String?
+  sources    SourceValue[]
+}
+
+model SourceValue {
+  id         String   @id @default(cuid())
+  ingestId   String
+  sourceName String
+  sourceUrl  String
+  value      Float?
+  valueDate  DateTime?
+  status     String
+  message    String?
+  ingestRun  IngestRun @relation(fields: [ingestId], references: [id], onDelete: Cascade)
+}

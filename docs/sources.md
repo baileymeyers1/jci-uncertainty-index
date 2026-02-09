@@ -1,0 +1,50 @@
+# Survey Sources
+
+Official source URLs and current adapter status. Update and add parsing notes as needed.
+
+- University of Michigan Consumer Sentiment
+  - Source: https://fred.stlouisfed.org/series/UMCSENT
+  - Adapter: FRED latest observation (monthly)
+- Conference Board Consumer Confidence
+  - Source: https://www.conference-board.org/topics/consumer-confidence/
+  - Adapter: HTML scrape of press release text (Consumer Confidence Index value)
+- NY Fed Consumer Expectations - inflation (median one-year ahead expected inflation rate)
+  - Source: https://www.newyorkfed.org/microeconomics/sce#/
+  - Adapter: HTML scrape of press release summary (median 1-year ahead inflation)
+- Duke/Fed CFO Survey Optimism - Economy
+  - Source: https://www.richmondfed.org/research/national_economy/cfo_survey/data_and_results
+  - Download: https://www.richmondfed.org/-/media/RichmondFedOrg/research/national_economy/cfo_survey/current_historical_cfo_data.xlsx
+  - Adapter: Excel parse (`economy_mean` + year/quarter)
+- NFIB Small Business Optimism
+  - Source: https://www.nfib.com/news/monthly_report/sbet/
+  - Adapter: HTML scrape (Optimism Index)
+- Business Roundtable CEO Outlook
+  - Source: https://www.businessroundtable.org/media/ceo-economic-outlook-index
+  - Adapter: HTML scrape (overall Index value)
+- Duke/Fed CFO Survey Optimism - Own Firm
+  - Source: https://www.richmondfed.org/research/national_economy/cfo_survey/data_and_results
+  - Download: https://www.richmondfed.org/-/media/RichmondFedOrg/research/national_economy/cfo_survey/current_historical_cfo_data.xlsx
+  - Adapter: Excel parse (`ownfirm_mean` + year/quarter)
+- EY-Parthenon CEO Confidence
+  - Source: https://www.ey.com/en_us/ceo/ceo-outlook-global-report
+  - Adapter: HTML scrape (overall sentiment value)
+- Deloitte CFO Confidence
+  - Source: https://www.deloitte.com/us/en/insights/topics/leadership/cfo-survey-data-dashboard.html
+  - Adapter: HTML scrape (CFO confidence value)
+- Economic Policy Uncertainty Index (month average)
+  - Source: https://fred.stlouisfed.org/series/USEPUINDXD
+  - Adapter: FRED daily series averaged across target month
+- NFIB Uncertainty Index
+  - Source: https://www.nfib.com/news/monthly_report/sbet/
+  - Adapter: HTML scrape (Uncertainty Index)
+- Atlanta Fed SBU Empgrowth Uncert
+  - Source: https://www.atlantafed.org/research-and-data/surveys/business-uncertainty
+  - Download: https://www.atlantafed.org/-/media/Project/Atlanta/FRBA/Documents/datafiles/research/surveys/business-uncertainty/sbu-data.xlsx
+  - Adapter: TODO (parse Excel download for Empgrowth uncertainty series)
+- Atlanta Fed SBU RevGrowth Uncert
+  - Source: https://www.atlantafed.org/research-and-data/surveys/business-uncertainty
+  - Download: https://www.atlantafed.org/-/media/Project/Atlanta/FRBA/Documents/datafiles/research/surveys/business-uncertainty/sbu-data.xlsx
+  - Adapter: TODO (parse Excel download for RevGrowth uncertainty series)
+- OECD Composite Consumer Confidence for United States
+  - Source: https://fred.stlouisfed.org/series/USACSCICP02STSAM
+  - Adapter: FRED latest observation (monthly)

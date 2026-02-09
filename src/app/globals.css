@@ -1,0 +1,49 @@
+@import "react-quill/dist/quill.snow.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-sand-50 text-ink-900 antialiased;
+}
+
+h1, h2, h3, h4 {
+  @apply font-serif;
+}
+
+p, li, a, button, input, textarea, label {
+  @apply font-sans;
+}
+
+.card {
+  @apply bg-white shadow-card rounded-2xl border border-sand-200;
+}
+
+.section-title {
+  @apply text-2xl font-serif text-ink-900;
+}
+
+.subtle {
+  @apply text-ink-600;
+}
+
+.button-primary {
+  @apply inline-flex items-center justify-center rounded-full bg-ink-900 px-4 py-2 text-sm font-semibold text-white shadow-subtle hover:bg-ink-800 transition;
+}
+
+.button-secondary {
+  @apply inline-flex items-center justify-center rounded-full border border-ink-700 px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-sand-100 transition;
+}
+
+.input {
+  @apply w-full rounded-xl border border-sand-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ember-500/40;
+}
+
+.textarea {
+  @apply w-full rounded-xl border border-sand-200 bg-white px-3 py-2 text-sm min-h-[120px] focus:outline-none focus:ring-2 focus:ring-ember-500/40;
+}
