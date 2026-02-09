@@ -10,9 +10,12 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => ({}));
     const target = body?.month ? new Date(body.month) : undefined;
     const result = await runMonthlyIngest(target);
+    const warningHtml = result.warnings?.length
+      ? `<p>Validation warnings: ${result.warnings.join("; ")}</p>`
+      : "";
     await sendAdminAlert(
       "JCI Uncertainty Index ingest completed",
-      `<p>Monthly ingest completed for ${result.month}.</p>${\n        result.warnings?.length\n          ? `<p>Validation warnings: ${result.warnings.join(\"; \")}</p>`\n          : \"\"\n      }`
+      `<p>Monthly ingest completed for ${result.month}.</p>${warningHtml}`
     );
     return NextResponse.json({ status: "ok", result });
   } catch (error) {

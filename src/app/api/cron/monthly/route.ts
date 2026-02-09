@@ -40,9 +40,12 @@ export async function POST(req: Request) {
       });
     }
 
+    const warningHtml = ingestResult.warnings?.length
+      ? `<p>Validation warnings: ${ingestResult.warnings.join("; ")}</p>`
+      : "";
     await sendAdminAlert(
       "JCI Uncertainty Index monthly automation",
-      `<p>Monthly ingest completed for ${ingestResult.month}. Draft ${contextEntry ? "generated" : "skipped (no context)"}.</p>${\n        ingestResult.warnings?.length\n          ? `<p>Validation warnings: ${ingestResult.warnings.join(\"; \")}</p>`\n          : \"\"\n      }`
+      `<p>Monthly ingest completed for ${ingestResult.month}. Draft ${contextEntry ? "generated" : "skipped (no context)"}.</p>${warningHtml}`
     );
 
     return NextResponse.json({ status: "ok" });
