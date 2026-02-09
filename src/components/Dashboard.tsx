@@ -90,10 +90,10 @@ export function Dashboard() {
     });
     const dates = Array.from(dateSet);
     const rows = dates.map((date) => {
-      const row = [date];
+      const row: string[] = [date];
       data.zScoreSeries.forEach((series) => {
         const point = series.points.find((p) => p.date === date);
-        row.push(point?.value ?? "");
+        row.push(point?.value !== null && point?.value !== undefined ? String(point.value) : "");
       });
       return row;
     });
