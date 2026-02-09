@@ -2,7 +2,14 @@ import { AdapterResult, SurveyAdapter } from "./types";
 import { fredLatestValue, fredMonthlyAverage } from "./fred";
 import { getSbuSeriesValue } from "./atlantaFed";
 import { getLatestCfoValue } from "./cfoSurvey";
-import {\n  scrapeBusinessRoundtableOutlook,\n  scrapeConferenceBoardConfidence,\n  scrapeDeloitteCfoConfidence,\n  scrapeEyParthenonConfidence,\n  scrapeNfibIndices,\n  scrapeNyFedInflationMedian\n} from \"./siteScrapers\";
+import {
+  scrapeBusinessRoundtableOutlook,
+  scrapeConferenceBoardConfidence,
+  scrapeDeloitteCfoConfidence,
+  scrapeEyParthenonConfidence,
+  scrapeNfibIndices,
+  scrapeNyFedInflationMedian
+} from "./siteScrapers";
 
 export const surveyAdapters: SurveyAdapter[] = [
   {
