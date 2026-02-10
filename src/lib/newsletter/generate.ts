@@ -61,6 +61,22 @@ const sectionPlans = [
   }
 ];
 
+const priorityOutlets = [
+  "New York Times",
+  "AP News",
+  "Reuters",
+  "Los Angeles Times",
+  "Wall Street Journal",
+  "Financial Times",
+  "BBC",
+  "Politico",
+  "Bloomberg",
+  "The Guardian",
+  "Forbes",
+  "Axios",
+  "Al Jazeera"
+];
+
 export async function generateNewsletterHTML(params: {
   monthLabel: string;
   context1: string;
@@ -69,6 +85,21 @@ export async function generateNewsletterHTML(params: {
 }) {
   const overview = await getOverviewData();
   const latest = overview.latest;
+  const indexSeries = overview.indexSeries ?? [];
+  const lastIndexPoints = indexSeries.filter((point) => point.indexScore !== null);
+  const latestPoint = lastIndexPoints.length ? lastIndexPoints[lastIndexPoints.length - 1] : null;
+  const prevPoint = lastIndexPoints.length > 1 ? lastIndexPoints[lastIndexPoints.length - 2] : null;
+  const momChange =
+    latestPoint?.indexScore !== null && latestPoint?.indexScore !== undefined && prevPoint?.indexScore !== null && prevPoint?.indexScore !== undefined
+      ? latestPoint.indexScore - prevPoint.indexScore
+      : null;
+
+  const trendPoints = lastIndexPoints.slice(-3);
+  const trendValues = trendPoints
+    .map((point) => point.indexScore)
+    .filter((value): value is number => value !== null && value !== undefined);
+  const trendLabels = trendPoints.map((point) => point.date);
+  const trendSparkline = trendValues.length >= 2 ? buildSparklineSvg(trendValues, "#c52127") : "";
   const percentile =
     latest.percentile !== null && latest.percentile !== undefined
       ? latest.percentile <= 1
@@ -77,9 +108,14 @@ export async function generateNewsletterHTML(params: {
       : null;
 
   const searchBundles = await Promise.all(
-    sectionPlans.map(async (plan) => {
+    sectionPlans.map(async (plan, idx) => {
+      const outletQueries = [
+        `${priorityOutlets[idx % priorityOutlets.length]} ${plan.section} ${params.monthLabel} uncertainty`,
+        `${priorityOutlets[(idx + 4) % priorityOutlets.length]} ${plan.section} ${params.monthLabel} risk`
+      ];
+      const queries = [...plan.queries, ...outletQueries];
       const results = await Promise.all(
-        plan.queries.map(async (query) => {
+        queries.map(async (query) => {
           try {
             return await braveSearch(`${query} ${params.monthLabel}`);
           } catch (error) {
@@ -94,7 +130,8 @@ export async function generateNewsletterHTML(params: {
       });
       return {
         section: plan.section,
-        queries: plan.queries,
+        queries,
+        outletTargets: outletQueries,
         sources: plan.sources,
         methods: plan.methods,
         results: Array.from(unique.values())
@@ -105,12 +142,13 @@ export async function generateNewsletterHTML(params: {
   const sourcesText = searchBundles
     .map((bundle) => {
       const searchTerms = bundle.queries.map((q) => `- ${q}`).join("\n");
+      const outletTargets = bundle.outletTargets.map((s) => `- ${s}`).join("\n");
       const keySources = bundle.sources.map((s) => `- ${s}`).join("\n");
       const methods = bundle.methods.map((m) => `- ${m}`).join("\n");
       const sources = bundle.results
         .map((r) => `- ${r.title}: ${r.url}`)
         .join("\n");
-      return `## ${bundle.section}\nSearch terms:\n${searchTerms}\nKey sources:\n${keySources}\nResearch methods:\n${methods}\nSources:\n${sources}`;
+      return `## ${bundle.section}\nSearch terms:\n${searchTerms}\nPriority outlet targets:\n${outletTargets}\nKey sources:\n${keySources}\nResearch methods:\n${methods}\nSources:\n${sources}`;
     })
     .join("\n\n");
 
@@ -120,6 +158,13 @@ Month: ${params.monthLabel}
 Index score: ${latest.indexScore ?? "N/A"}
 Index z-score: ${latest.indexZ ?? "N/A"}
 Index percentile: ${percentile ?? "N/A"}
+MoM change (index score): ${momChange !== null ? momChange.toFixed(2) : "N/A"}
+Latest month label: ${latestPoint?.date ?? "N/A"}
+Previous month label: ${prevPoint?.date ?? "N/A"}
+3-month trend labels: ${trendLabels.join(", ") || "N/A"}
+3-month trend values: ${trendValues.join(", ") || "N/A"}
+3-month trend sparkline (include this HTML in Index summary section):
+${trendSparkline || "N/A"}
 
 Context inputs:
 1. ${params.context1}
@@ -148,6 +193,8 @@ Requirements:
 - Use the sources provided above as primary citations; do not invent sources.
 - Each section should clearly reflect the research plan (search terms, key sources, methods) even if you do not output that plan.
 - Keep the tone executive, data-rich, and precise. Use short paragraphs and bullet lists where helpful.
+- Target 150-200 words per section.
+- In the Index summary, explicitly include the MoM change and reference the 3-month trend sparkline.
 `;
 
   const html = sanitizeClaudeHtml(await callClaude(prompt));
@@ -165,4 +212,26 @@ function sanitizeClaudeHtml(input: string) {
   output = output.replace(/^\s*html\s+/i, "");
   output = output.replace(/^["'`]+/, "").replace(/["'`]+$/, "");
   return output.trim();
+}
+
+function buildSparklineSvg(values: number[], color: string) {
+  if (values.length < 2) return "";
+  const width = 220;
+  const height = 60;
+  const padding = 6;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const step = (width - padding * 2) / (values.length - 1);
+  const points = values
+    .map((value, idx) => {
+      const x = padding + idx * step;
+      const y = height - padding - ((value - min) / range) * (height - padding * 2);
+      return `${x},${y}`;
+    })
+    .join(" ");
+  return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="3-month trend sparkline" style="display:block;margin-top:8px;">
+  <rect width="${width}" height="${height}" fill="#fffaf7" />
+  <polyline fill="none" stroke="${color}" stroke-width="2" points="${points}" />
+</svg>`;
 }
