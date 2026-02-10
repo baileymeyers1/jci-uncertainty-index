@@ -117,6 +117,7 @@ export async function generateNewsletterHTML(params: {
       .filter((value): value is number => value !== null),
     "#c52127"
   );
+  const publishedLineHtml = buildPublishedLineHtml(dataThrough);
   const percentile =
     latest.percentile !== null && latest.percentile !== undefined
       ? latest.percentile <= 1
@@ -220,7 +221,12 @@ Requirements:
 - In the Index summary, explicitly include the MoM change and reference the 3-month trend sparkline.
 `;
 
-  const html = await generateClaudeHtml(prompt);
+  const html = injectHeaderAssets(await generateClaudeHtml(prompt), {
+    monthLabel: params.monthLabel,
+    publishedLineHtml,
+    indexTrendSvg,
+    contextTagsHtml
+  });
 
   return {
     html,
@@ -292,7 +298,7 @@ function buildContextTagsHtml(tags: Array<{ label: string; value: string }>) {
         `<span style="display:inline-block;background:#fff3f3;border:1px solid #f1c0c2;color:#7a1d22;padding:4px 10px;border-radius:999px;font-size:12px;margin-right:6px;margin-bottom:6px;">${tag.label}: ${tag.value}</span>`
     )
     .join("");
-  return `<div style="margin:12px 0 6px 0;">${tagHtml}</div>`;
+  return `<div data-jci="context-tags" style="margin:12px 0 6px 0;">${tagHtml}</div>`;
 }
 
 function buildIndexTrendSvg(values: number[], color: string) {
@@ -312,8 +318,50 @@ function buildIndexTrendSvg(values: number[], color: string) {
     })
     .join(" ");
 
-  return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Index score trend" style="display:block;margin-top:12px;">
+  return `<svg data-jci="index-trend" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Index score trend" style="display:block;margin-top:12px;">
   <rect width="${width}" height="${height}" fill="#fffaf7" />
   <polyline fill="none" stroke="${color}" stroke-width="2.5" points="${points}" />
 </svg>`;
+}
+
+function buildPublishedLineHtml(dataThrough: string) {
+  return `<p data-jci="published-line" style="margin:4px 0 12px 0;color:#7a1d22;font-size:13px;">Published monthly · Data through ${dataThrough}</p>`;
+}
+
+function injectHeaderAssets(
+  rawHtml: string,
+  params: {
+    monthLabel: string;
+    publishedLineHtml: string;
+    indexTrendSvg: string;
+    contextTagsHtml: string;
+  }
+) {
+  let html = sanitizeClaudeHtml(rawHtml);
+  const titleRegex = /<h1[^>]*>.*?<\/h1>/is;
+  const titleMatch = html.match(titleRegex);
+  const headerBlock = [
+    params.publishedLineHtml,
+    params.indexTrendSvg,
+    params.contextTagsHtml
+  ]
+    .filter(Boolean)
+    .join("");
+
+  if (titleMatch) {
+    const hasPublished = html.includes('data-jci="published-line"') || html.includes("Published monthly");
+    const hasTrend = html.includes('data-jci="index-trend"');
+    const hasTags = html.includes('data-jci="context-tags"');
+    const injections: string[] = [];
+    if (!hasPublished) injections.push(params.publishedLineHtml);
+    if (!hasTrend) injections.push(params.indexTrendSvg);
+    if (!hasTags) injections.push(params.contextTagsHtml);
+    if (injections.length) {
+      html = html.replace(titleRegex, (match) => `${match}${injections.join("")}`);
+    }
+    return html;
+  }
+
+  const fallbackTitle = `<h1 style="color:#c52127;font-size:28px;margin:0 0 8px 0;">JCI Uncertainty Index Monthly Newsletter - ${params.monthLabel}</h1>`;
+  return `${fallbackTitle}${headerBlock}${html}`;
 }
