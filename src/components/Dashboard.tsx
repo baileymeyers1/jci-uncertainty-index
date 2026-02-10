@@ -397,7 +397,9 @@ function compareDateLabels(a: string, b: string) {
   return a.localeCompare(b);
 }
 
-function computeSeriesDomain(series: Array<{ points: { value: number | null }[] }>) {
+function computeSeriesDomain(
+  series: Array<{ points: { value: number | null }[] }>
+): [number | "auto", number | "auto"] {
   const values: number[] = [];
   series.forEach((entry) => {
     entry.points.forEach((point) => {
@@ -406,7 +408,7 @@ function computeSeriesDomain(series: Array<{ points: { value: number | null }[] 
       }
     });
   });
-  if (!values.length) return ["auto", "auto"] as const;
+  if (!values.length) return ["auto", "auto"];
   let min = Math.min(...values);
   let max = Math.max(...values);
   if (min === max) {
@@ -417,5 +419,5 @@ function computeSeriesDomain(series: Array<{ points: { value: number | null }[] 
     min -= pad;
     max += pad;
   }
-  return [min, max] as const;
+  return [min, max];
 }
