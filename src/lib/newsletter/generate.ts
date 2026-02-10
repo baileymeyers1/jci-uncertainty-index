@@ -197,7 +197,7 @@ Requirements:
 - In the Index summary, explicitly include the MoM change and reference the 3-month trend sparkline.
 `;
 
-  const html = sanitizeClaudeHtml(await callClaude(prompt));
+  const html = sanitizeClaudeHtml(await callClaude(prompt, { maxTokens: 4096 }));
 
   return {
     html,

@@ -7,7 +7,12 @@ interface ClaudeMessage {
   content: string;
 }
 
-export async function callClaude(prompt: string): Promise<string> {
+interface ClaudeOptions {
+  maxTokens?: number;
+  temperature?: number;
+}
+
+export async function callClaude(prompt: string, options: ClaudeOptions = {}): Promise<string> {
   const env = getEnv();
   const model = env.CLAUDE_MODEL?.trim() || "claude-opus-4-6";
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -19,8 +24,8 @@ export async function callClaude(prompt: string): Promise<string> {
     },
     body: JSON.stringify({
       model,
-      max_tokens: 1800,
-      temperature: 0.4,
+      max_tokens: options.maxTokens ?? 4096,
+      temperature: options.temperature ?? 0.4,
       messages: [{ role: "user", content: prompt } as ClaudeMessage]
     })
   });
