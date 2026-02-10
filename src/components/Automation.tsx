@@ -108,6 +108,8 @@ export function Automation() {
     (sendMode === "all" ||
       (sendMode === "single" && sendEmail.trim().length > 0) ||
       (sendMode === "selected" && selectedRecipientIds.length > 0));
+  const queuedDraft = data?.drafts?.find((draft) => draft.status === "QUEUED") ?? null;
+  const queueDisabled = !!queuedDraft && queuedDraft.id !== selectedDraft?.id;
 
   async function openReviewForMonths(months: string[]) {
     try {
@@ -185,28 +187,6 @@ export function Automation() {
     }
   }
 
-  const saveContext = useMutation({
-    mutationFn: async () => {
-      setActionError(null);
-      setActionSuccess(null);
-      const res = await fetch("/api/context", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ context1, context2, context3 })
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "Failed to save context");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      setActionSuccess("Context saved.");
-      queryClient.invalidateQueries({ queryKey: ["history"] });
-    },
-    onError: (err) => setActionError(err instanceof Error ? err.message : "Failed to save context")
-  });
-
   const generateDraft = useMutation({
     mutationFn: async () => {
       setActionError(null);
@@ -240,6 +220,23 @@ export function Automation() {
       return res.json();
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["history"] })
+  });
+
+  const deleteDraft = useMutation({
+    mutationFn: async (draftId: string) => {
+      const res = await fetch(`/api/newsletter/${draftId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Failed to delete draft");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      setSelectedDraft(null);
+      setDraftHtml("");
+      queryClient.invalidateQueries({ queryKey: ["history"] });
+    },
+    onError: (err) => setActionError(err instanceof Error ? err.message : "Failed to delete draft")
   });
 
   const saveDraft = useMutation({
@@ -398,9 +395,6 @@ export function Automation() {
           <textarea className="textarea" value={context3} onChange={(e) => setContext3(e.target.value)} placeholder="Context 3" />
         </div>
         <div className="flex flex-wrap gap-3">
-          <button className="button-secondary" onClick={() => saveContext.mutate()} disabled={!contextComplete}>
-            Save context
-          </button>
           <button
             className="button-primary"
             onClick={() => generateDraft.mutate()}
@@ -446,8 +440,30 @@ export function Automation() {
               <ReactQuill theme="snow" value={draftHtml} onChange={setDraftHtml} />
               <div className="flex flex-wrap gap-3">
                 <button className="button-secondary" onClick={() => saveDraft.mutate()}>Save edits</button>
-                <button className="button-primary" onClick={() => queueSend.mutate(selectedDraft.id)}>Queue send</button>
+                <button
+                  className="button-primary"
+                  onClick={() => queueSend.mutate(selectedDraft.id)}
+                  disabled={queueSend.isPending || queueDisabled || selectedDraft.status === "QUEUED"}
+                >
+                  {queueSend.isPending ? "Queueing..." : "Queue send"}
+                </button>
+                <button
+                  className="button-secondary"
+                  onClick={() => {
+                    if (!selectedDraft) return;
+                    if (!confirm("Delete this draft? This cannot be undone.")) return;
+                    deleteDraft.mutate(selectedDraft.id);
+                  }}
+                  disabled={deleteDraft.isPending || selectedDraft.status === "QUEUED"}
+                >
+                  {deleteDraft.isPending ? "Deleting..." : "Delete draft"}
+                </button>
               </div>
+              {queueDisabled && queuedDraft ? (
+                <p className="text-xs text-ember-600">
+                  A draft is already queued ({queuedDraft.month}). Please send or cancel it before queueing another.
+                </p>
+              ) : null}
             </div>
           ) : (
             <p className="subtle mt-4">Select a draft to begin editing.</p>

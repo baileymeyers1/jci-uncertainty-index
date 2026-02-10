@@ -12,6 +12,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "draftId is required" }, { status: 400 });
   }
 
+  const existingQueue = await prisma.sendSchedule.findFirst({
+    where: { status: "QUEUED" }
+  });
+  if (existingQueue) {
+    return NextResponse.json(
+      { error: "A draft is already queued. Please cancel or send it before queueing another." },
+      { status: 409 }
+    );
+  }
+
   const draft = await prisma.draft.findUnique({ where: { id: draftId } });
   if (!draft) {
     return NextResponse.json({ error: "Draft not found" }, { status: 404 });

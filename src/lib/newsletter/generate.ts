@@ -3,6 +3,7 @@ import "server-only";
 import { braveSearch } from "@/lib/newsletter/brave";
 import { callClaude } from "@/lib/newsletter/claude";
 import { getOverviewData } from "@/lib/sheets";
+import { format, isValid, parse } from "date-fns";
 
 const sectionPlans = [
   {
@@ -100,6 +101,22 @@ export async function generateNewsletterHTML(params: {
     .filter((value): value is number => value !== null && value !== undefined);
   const trendLabels = trendPoints.map((point) => point.date);
   const trendSparkline = trendValues.length >= 2 ? buildSparklineSvg(trendValues, "#c52127") : "";
+  const monthDate = parse(params.monthLabel, "MMM yyyy", new Date());
+  const dataThrough = isValid(monthDate)
+    ? format(new Date(monthDate.getFullYear(), monthDate.getMonth(), 2), "d MMMM yyyy")
+    : params.monthLabel;
+  const contextTagsHtml = buildContextTagsHtml([
+    { label: "Context 1", value: params.context1 },
+    { label: "Context 2", value: params.context2 },
+    { label: "Context 3", value: params.context3 }
+  ]);
+  const indexTrendSvg = buildIndexTrendSvg(
+    lastIndexPoints
+      .slice(-12)
+      .map((point) => point.indexScore ?? null)
+      .filter((value): value is number => value !== null),
+    "#c52127"
+  );
   const percentile =
     latest.percentile !== null && latest.percentile !== undefined
       ? latest.percentile <= 1
@@ -165,6 +182,11 @@ Previous month label: ${prevPoint?.date ?? "N/A"}
 3-month trend values: ${trendValues.join(", ") || "N/A"}
 3-month trend sparkline (include this HTML in Index summary section):
 ${trendSparkline || "N/A"}
+Data through: ${dataThrough}
+Index trend chart (include near top of newsletter, after title and published line):
+${indexTrendSvg || "N/A"}
+Context tags HTML (include near the chart to show which context inputs were used):
+${contextTagsHtml || "N/A"}
 
 Context inputs:
 1. ${params.context1}
@@ -189,6 +211,7 @@ Requirements:
 - Output valid HTML only. Do NOT wrap in markdown or code fences.
 - Use a single H1 title: "JCI Uncertainty Index Monthly Newsletter - ${params.monthLabel}".
 - Use #c52127 as the primary color for headings, accents, and links. Use email-safe inline styles.
+- Include the line: "Published monthly · Data through ${dataThrough}" directly under the H1 title.
 - Every claim or bullet point must include at least one inline link (<a href="...">) to a source.
 - Use the sources provided above as primary citations; do not invent sources.
 - Each section should clearly reflect the research plan (search terms, key sources, methods) even if you do not output that plan.
@@ -197,7 +220,7 @@ Requirements:
 - In the Index summary, explicitly include the MoM change and reference the 3-month trend sparkline.
 `;
 
-  const html = sanitizeClaudeHtml(await callClaude(prompt, { maxTokens: 4096 }));
+  const html = await generateClaudeHtml(prompt);
 
   return {
     html,
@@ -233,5 +256,64 @@ function buildSparklineSvg(values: number[], color: string) {
   return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="3-month trend sparkline" style="display:block;margin-top:8px;">
   <rect width="${width}" height="${height}" fill="#fffaf7" />
   <polyline fill="none" stroke="${color}" stroke-width="2" points="${points}" />
+</svg>`;
+}
+
+async function generateClaudeHtml(prompt: string) {
+  const first = await callClaude(prompt, { maxTokens: 8192 });
+  let html = sanitizeClaudeHtml(first.text);
+  let stopReason = first.stopReason;
+  let attempts = 0;
+
+  while (stopReason === "max_tokens" && attempts < 2) {
+    const tail = html.slice(-1500);
+    const continuationPrompt = `Continue the HTML newsletter from exactly where it left off. Do not repeat the title or any completed sections. Continue immediately after the last character of the existing HTML.
+
+Existing HTML tail:
+${tail}
+
+Return HTML only.`;
+    const next = await callClaude(continuationPrompt, { maxTokens: 8192, temperature: 0.3 });
+    const nextHtml = sanitizeClaudeHtml(next.text);
+    html = `${html}${nextHtml}`;
+    stopReason = next.stopReason;
+    attempts += 1;
+  }
+
+  return html;
+}
+
+function buildContextTagsHtml(tags: Array<{ label: string; value: string }>) {
+  const safeTags = tags.filter((tag) => tag.value && tag.value.trim().length > 0);
+  if (!safeTags.length) return "";
+  const tagHtml = safeTags
+    .map(
+      (tag) =>
+        `<span style="display:inline-block;background:#fff3f3;border:1px solid #f1c0c2;color:#7a1d22;padding:4px 10px;border-radius:999px;font-size:12px;margin-right:6px;margin-bottom:6px;">${tag.label}: ${tag.value}</span>`
+    )
+    .join("");
+  return `<div style="margin:12px 0 6px 0;">${tagHtml}</div>`;
+}
+
+function buildIndexTrendSvg(values: number[], color: string) {
+  if (values.length < 2) return "";
+  const width = 520;
+  const height = 180;
+  const padding = 16;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const step = (width - padding * 2) / (values.length - 1);
+  const points = values
+    .map((value, idx) => {
+      const x = padding + idx * step;
+      const y = height - padding - ((value - min) / range) * (height - padding * 2);
+      return `${x},${y}`;
+    })
+    .join(" ");
+
+  return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Index score trend" style="display:block;margin-top:12px;">
+  <rect width="${width}" height="${height}" fill="#fffaf7" />
+  <polyline fill="none" stroke="${color}" stroke-width="2.5" points="${points}" />
 </svg>`;
 }

@@ -12,9 +12,13 @@ interface ClaudeOptions {
   temperature?: number;
 }
 
-export async function callClaude(prompt: string, options: ClaudeOptions = {}): Promise<string> {
+export async function callClaude(
+  prompt: string,
+  options: ClaudeOptions = {}
+): Promise<{ text: string; stopReason?: string | null }> {
   const env = getEnv();
   const model = env.CLAUDE_MODEL?.trim() || "claude-opus-4-6";
+  const maxTokens = options.maxTokens ?? env.CLAUDE_MAX_TOKENS ?? 8192;
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -24,7 +28,7 @@ export async function callClaude(prompt: string, options: ClaudeOptions = {}): P
     },
     body: JSON.stringify({
       model,
-      max_tokens: options.maxTokens ?? 4096,
+      max_tokens: maxTokens,
       temperature: options.temperature ?? 0.4,
       messages: [{ role: "user", content: prompt } as ClaudeMessage]
     })
@@ -36,5 +40,8 @@ export async function callClaude(prompt: string, options: ClaudeOptions = {}): P
   }
 
   const data = await res.json();
-  return data?.content?.[0]?.text ?? "";
+  return {
+    text: data?.content?.[0]?.text ?? "",
+    stopReason: data?.stop_reason ?? null
+  };
 }

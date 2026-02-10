@@ -11,6 +11,7 @@ const envSchema = z.object({
   GOOGLE_SHEET_ID: z.string().min(1),
   CLAUDE_API_KEY: z.string().min(1),
   CLAUDE_MODEL: z.string().min(1).optional(),
+  CLAUDE_MAX_TOKENS: z.coerce.number().int().positive().optional(),
   BRAVE_API_KEY: z.string().min(1),
   FRED_API_KEY: z.string().min(1),
   BREVO_API_KEY: z.string().min(1),
