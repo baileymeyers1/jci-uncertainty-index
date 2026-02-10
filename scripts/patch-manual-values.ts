@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { patchMonthlyRowPartial, sortSheetByDate } from "../src/lib/sheets";
+import { patchMonthlyRowPartial, sortSheetByDate, syncZScoreDatesFromData } from "../src/lib/sheets";
 
 function loadEnv() {
   const envPath = path.join(process.cwd(), ".env");
@@ -25,36 +25,40 @@ loadEnv();
 
 const updates: Record<string, Record<string, number>> = {
   "Nov 2025": {
-    "Conference Board Consumer Confidence": 111.6,
     "NFIB Small Business Optimism": 98.2,
     "NFIB Uncertainty Index": 88,
     "EY-Parthenon CEO Confidence": 83,
     "Deloitte CFO Confidence": 5.7,
-    "Business Roundtable CEO Outlook": 76
+    "Business Roundtable CEO Outlook": 76,
+    "University of Michigan Consumer Sentiment": 53.6,
+    "NY Fed Consumer Expectations - Inflation": 3.24
   },
   "Dec 2025": {
-    "Conference Board Consumer Confidence": 109.5,
     "NFIB Small Business Optimism": 99,
     "NFIB Uncertainty Index": 91,
     "EY-Parthenon CEO Confidence": 83,
     "Deloitte CFO Confidence": 5.7,
-    "Business Roundtable CEO Outlook": 76
+    "Business Roundtable CEO Outlook": 76,
+    "University of Michigan Consumer Sentiment": 51,
+    "NY Fed Consumer Expectations - Inflation": 3.2
   },
   "Jan 2026": {
-    "Conference Board Consumer Confidence": 94.2,
     "NFIB Small Business Optimism": 99.5,
     "NFIB Uncertainty Index": 84,
     "EY-Parthenon CEO Confidence": 83,
     "Deloitte CFO Confidence": 6.6,
-    "Business Roundtable CEO Outlook": 80
+    "Business Roundtable CEO Outlook": 80,
+    "University of Michigan Consumer Sentiment": 52.9,
+    "NY Fed Consumer Expectations - Inflation": 3.42
   },
   "Feb 2026": {
-    "Conference Board Consumer Confidence": 84.5,
     "NFIB Small Business Optimism": 99.3,
     "NFIB Uncertainty Index": 91,
     "EY-Parthenon CEO Confidence": 78.5,
     "Deloitte CFO Confidence": 6.6,
-    "Business Roundtable CEO Outlook": 80
+    "Business Roundtable CEO Outlook": 80,
+    "University of Michigan Consumer Sentiment": 56.4,
+    "NY Fed Consumer Expectations - Inflation": 3.1
   }
 };
 
@@ -66,6 +70,7 @@ async function run() {
       data: values
     });
   }
+  await syncZScoreDatesFromData();
   await sortSheetByDate("Data");
 }
 

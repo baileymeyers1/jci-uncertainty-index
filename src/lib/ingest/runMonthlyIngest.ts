@@ -2,12 +2,23 @@ import "server-only";
 
 import { prisma } from "@/lib/prisma";
 import { surveyAdapters } from "@/lib/ingest/adapters/sources";
-import { formatMonthLabel, getLatestDataRowMapForMonth, getMetaStatsMap, getSheetValues, normalizeHeader, upsertMonthlyRowPartial } from "@/lib/sheets";
+import {
+  findRowByDate,
+  formatMonthLabel,
+  getLatestDataRowMapForMonth,
+  getMetaStatsMap,
+  getSheetValues,
+  normalizeHeader,
+  syncZScoreDatesFromData,
+  upsertMonthlyRowPartial
+} from "@/lib/sheets";
 import { format } from "date-fns";
 
 export async function runMonthlyIngest(targetMonth?: Date) {
   const monthDate = targetMonth ?? new Date();
   const monthLabel = formatMonthLabel(monthDate);
+  const currentMonthLabel = formatMonthLabel(new Date());
+  const isHistorical = monthLabel !== currentMonthLabel;
 
   const ingestRun = await prisma.ingestRun.create({
     data: {
@@ -21,6 +32,14 @@ export async function runMonthlyIngest(targetMonth?: Date) {
     const metaStats = await getMetaStatsMap();
     const dataSheetValues = await getSheetValues("Data");
     const headers = dataSheetValues[0] ?? [];
+    const headerIndexMap = new Map<string, number>();
+    headers.forEach((header, idx) => {
+      if (header) {
+        headerIndexMap.set(normalizeHeader(header), idx);
+      }
+    });
+    const existingRowIndex = findRowByDate(dataSheetValues, monthLabel);
+    const existingRow = existingRowIndex !== -1 ? dataSheetValues[existingRowIndex] : null;
     const headerSet = new Set(headers.map((h) => (h ? normalizeHeader(h) : "")).filter(Boolean) as string[]);
 
     const rowData: Record<string, string | number | null> = {};
@@ -61,6 +80,17 @@ export async function runMonthlyIngest(targetMonth?: Date) {
           carriedForward = true;
         }
 
+        let lockedValue = false;
+        if (isHistorical && existingRow) {
+          const existingIdx = headerIndexMap.get(normalizedHeader);
+          const existingCell = existingIdx !== undefined ? existingRow[existingIdx] : undefined;
+          if (existingCell !== undefined && existingCell !== null && existingCell.toString().trim() !== "") {
+            const parsed = Number(existingCell);
+            finalValue = Number.isFinite(parsed) ? parsed : null;
+            lockedValue = true;
+          }
+        }
+
         rowData[normalizedHeader] = finalValue;
         const validation = validateValue(normalizedHeader, finalValue, metaStats);
         const status = validation ? "warning" : result.status;
@@ -69,6 +99,7 @@ export async function runMonthlyIngest(targetMonth?: Date) {
         }
 
         const carryMessage = carriedForward ? "Carried forward prior value" : null;
+        const lockMessage = lockedValue ? "Preserved locked historical value" : null;
 
         await prisma.sourceValue.create({
           data: {
@@ -78,12 +109,22 @@ export async function runMonthlyIngest(targetMonth?: Date) {
             value: finalValue,
             valueDate: result.valueDate ?? monthDate,
             status,
-            message: [result.message, validation, carryMessage].filter(Boolean).join(" | ") || null
+            message: [result.message, validation, carryMessage, lockMessage].filter(Boolean).join(" | ") || null
           }
         });
       } catch (error) {
         const carry = latestRowMap[normalizedHeader];
-        const finalValue = carry ? Number(carry) : null;
+        let finalValue: number | null = carry ? Number(carry) : null;
+        let lockedValue = false;
+        if (isHistorical && existingRow) {
+          const existingIdx = headerIndexMap.get(normalizedHeader);
+          const existingCell = existingIdx !== undefined ? existingRow[existingIdx] : undefined;
+          if (existingCell !== undefined && existingCell !== null && existingCell.toString().trim() !== "") {
+            const parsed = Number(existingCell);
+            finalValue = Number.isFinite(parsed) ? parsed : null;
+            lockedValue = true;
+          }
+        }
         rowData[normalizedHeader] = finalValue;
 
         await prisma.sourceValue.create({
@@ -94,7 +135,12 @@ export async function runMonthlyIngest(targetMonth?: Date) {
             value: finalValue,
             valueDate: monthDate,
             status: "failed",
-            message: error instanceof Error ? error.message : "Unknown error"
+            message: [
+              error instanceof Error ? error.message : "Unknown error",
+              lockedValue ? "Preserved locked historical value" : null
+            ]
+              .filter(Boolean)
+              .join(" | ")
           }
         });
       }
@@ -107,6 +153,11 @@ export async function runMonthlyIngest(targetMonth?: Date) {
       data: rowData,
       maxRawIndex
     });
+    try {
+      await syncZScoreDatesFromData();
+    } catch (error) {
+      console.error("Failed to sync zscores dates", error);
+    }
 
     const message = warnings.length
       ? `Ingest completed with ${warnings.length} validation warnings: ${warnings.join("; ")}`

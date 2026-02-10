@@ -10,7 +10,8 @@ Official source URLs and current adapter status. Update and add parsing notes as
   - Adapter: HTML scrape of press release text (Consumer Confidence Index value)
 - NY Fed Consumer Expectations - inflation (median one-year ahead expected inflation rate)
   - Source: https://www.newyorkfed.org/microeconomics/sce#/
-  - Adapter: HTML scrape of press release summary (median 1-year ahead inflation)
+  - Download: https://www.newyorkfed.org/medialibrary/interactives/sce/sce/downloads/data/frbny-sce-data.xlsx?sc_lang=en
+  - Adapter: Excel parse of "Inflation expectations" sheet (median one-year ahead expected inflation rate)
 - Duke/Fed CFO Survey Optimism - Economy
   - Source: https://www.richmondfed.org/research/national_economy/cfo_survey/data_and_results
   - Download: https://www.richmondfed.org/-/media/RichmondFedOrg/research/national_economy/cfo_survey/current_historical_cfo_data.xlsx

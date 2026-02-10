@@ -1,14 +1,14 @@
 import { AdapterResult, SurveyAdapter } from "./types";
-import { fredLatestValue, fredMonthlyAverage } from "./fred";
+import { fredLatestValue, fredLatestValueBefore, fredMonthlyAverage } from "./fred";
 import { getSbuSeriesValue } from "./atlantaFed";
 import { getLatestCfoValue } from "./cfoSurvey";
+import { getNyFedInflationMedian } from "./nyFedSce";
 import {
   scrapeBusinessRoundtableOutlook,
   scrapeConferenceBoardConfidence,
   scrapeDeloitteCfoConfidence,
   scrapeEyParthenonConfidence,
-  scrapeNfibIndices,
-  scrapeNyFedInflationMedian
+  scrapeNfibIndices
 } from "./siteScrapers";
 
 export const surveyAdapters: SurveyAdapter[] = [
@@ -18,8 +18,9 @@ export const surveyAdapters: SurveyAdapter[] = [
     frequency: "monthly",
     sourceUrl: "https://fred.stlouisfed.org/series/UMCSENT",
     releaseCadence: "Monthly",
-    fetchValue: async () => {
-      const result = await fredLatestValue("UMCSENT");
+    fetchValue: async (targetMonth) => {
+      const cutoff = new Date(targetMonth.getFullYear(), targetMonth.getMonth(), 0);
+      const result = await fredLatestValueBefore("UMCSENT", cutoff);
       if (!result) return { value: null, status: "missing" };
       return { value: result.value, valueDate: result.date, status: "success" };
     }
@@ -40,12 +41,12 @@ export const surveyAdapters: SurveyAdapter[] = [
     name: "NY Fed Consumer Expectations - Inflation",
     sheetHeader: "NY Fed Consumer Expectations - Inflation",
     frequency: "monthly",
-    sourceUrl: "https://www.newyorkfed.org/microeconomics/sce#/",
+    sourceUrl: "https://www.newyorkfed.org/microeconomics/sce",
     releaseCadence: "Monthly",
-    fetchValue: async () => {
-      const value = await scrapeNyFedInflationMedian();
-      if (value === null) return { value: null, status: "missing" };
-      return { value, status: "success" };
+    fetchValue: async (targetMonth) => {
+      const result = await getNyFedInflationMedian(targetMonth);
+      if (!result) return { value: null, status: "missing" };
+      return { value: result.value, valueDate: result.date, status: "success" };
     }
   },
   {

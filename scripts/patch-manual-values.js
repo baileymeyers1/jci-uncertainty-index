@@ -26,36 +26,40 @@ loadEnv();
 
 const updates = {
   "Nov 2025": {
-    "Conference Board Consumer Confidence": 111.6,
     "NFIB Small Business Optimism": 98.2,
     "NFIB Uncertainty Index": 88,
     "EY-Parthenon CEO Confidence": 83,
     "Deloitte CFO Confidence": 5.7,
-    "Business Roundtable CEO Outlook": 76
+    "Business Roundtable CEO Outlook": 76,
+    "University of Michigan Consumer Sentiment": 53.6,
+    "NY Fed Consumer Expectations - Inflation": 3.24
   },
   "Dec 2025": {
-    "Conference Board Consumer Confidence": 109.5,
     "NFIB Small Business Optimism": 99,
     "NFIB Uncertainty Index": 91,
     "EY-Parthenon CEO Confidence": 83,
     "Deloitte CFO Confidence": 5.7,
-    "Business Roundtable CEO Outlook": 76
+    "Business Roundtable CEO Outlook": 76,
+    "University of Michigan Consumer Sentiment": 51,
+    "NY Fed Consumer Expectations - Inflation": 3.2
   },
   "Jan 2026": {
-    "Conference Board Consumer Confidence": 94.2,
     "NFIB Small Business Optimism": 99.5,
     "NFIB Uncertainty Index": 84,
     "EY-Parthenon CEO Confidence": 83,
     "Deloitte CFO Confidence": 6.6,
-    "Business Roundtable CEO Outlook": 80
+    "Business Roundtable CEO Outlook": 80,
+    "University of Michigan Consumer Sentiment": 52.9,
+    "NY Fed Consumer Expectations - Inflation": 3.42
   },
   "Feb 2026": {
-    "Conference Board Consumer Confidence": 84.5,
     "NFIB Small Business Optimism": 99.3,
     "NFIB Uncertainty Index": 91,
     "EY-Parthenon CEO Confidence": 78.5,
     "Deloitte CFO Confidence": 6.6,
-    "Business Roundtable CEO Outlook": 80
+    "Business Roundtable CEO Outlook": 80,
+    "University of Michigan Consumer Sentiment": 56.4,
+    "NY Fed Consumer Expectations - Inflation": 3.1
   }
 };
 
@@ -82,6 +86,10 @@ async function getSheetValues(sheets, sheetName) {
 
 function normalizeHeader(header) {
   return header.trim().replace(/\s+/g, " ");
+}
+
+function normalizeSheetName(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
 function getHeaderMap(values) {
@@ -132,11 +140,16 @@ async function appendRowRange(sheets, sheetName, endCol, row) {
 
 async function getSheetId(sheets, sheetName) {
   const res = await sheets.spreadsheets.get({ spreadsheetId: process.env.GOOGLE_SHEET_ID });
-  const sheet = res.data.sheets?.find((s) => s.properties?.title === sheetName);
-  if (!sheet?.properties?.sheetId) {
-    throw new Error(`Sheet ${sheetName} not found`);
+  const titles = (res.data.sheets || [])
+    .map((s) => s.properties?.title)
+    .filter((title) => typeof title === "string");
+  const target = normalizeSheetName(sheetName);
+  const sheet = res.data.sheets?.find((s) => normalizeSheetName(s.properties?.title || "") === target);
+  const sheetId = sheet?.properties?.sheetId;
+  if (sheetId === undefined || sheetId === null) {
+    throw new Error(`Sheet ${sheetName} not found. Available: ${titles.join(", ")}`);
   }
-  return sheet.properties.sheetId;
+  return sheetId;
 }
 
 async function copyFormulaRange(sheets, sheetName, sourceRow, targetRow, startCol, endCol) {
@@ -234,11 +247,94 @@ async function patchMonthlyRow(sheets, sheetName, dateLabel, data) {
   }
 }
 
+async function ensureZScoreRow(sheets, dateLabel) {
+  const values = await getSheetValues(sheets, "zscores");
+  const headers = values[0] || [];
+  if (!headers.length) return;
+  const dateIdx = headers.findIndex((header) => normalizeHeader(header) === "DATE");
+  const rowIndex = findRowByDate(values, dateLabel);
+  if (rowIndex !== -1) return;
+
+  const dateCol = dateIdx === -1 ? 0 : dateIdx;
+  const row = new Array(headers.length).fill("");
+  row[dateCol] = dateLabel;
+  await appendRowRange(sheets, "zscores", headers.length - 1, row);
+
+  const newRowIndex = values.length;
+  const formulaStart = dateCol + 1;
+  const formulaEnd = headers.length - 1;
+  if (formulaStart <= formulaEnd && newRowIndex > 1) {
+    try {
+      await copyFormulaRange(sheets, "zscores", newRowIndex - 1, newRowIndex, formulaStart, formulaEnd);
+    } catch (error) {
+      console.error("Z-score formula copy failed", error);
+    }
+  }
+}
+
+async function syncZScoreDatesFromData(sheets) {
+  const dataValues = await getSheetValues(sheets, "Data");
+  const zValues = await getSheetValues(sheets, "zscores");
+  if (!dataValues.length || !zValues.length) return;
+
+  const dataHeaders = dataValues[0] || [];
+  const zHeaders = zValues[0] || [];
+  if (!dataHeaders.length || !zHeaders.length) return;
+
+  const dataDateIdx = dataHeaders.findIndex((header) => normalizeHeader(header) === "DATE");
+  const zDateIdx = zHeaders.findIndex((header) => normalizeHeader(header) === "DATE");
+  if (dataDateIdx === -1) return;
+
+  const zDateCol = zDateIdx === -1 ? 0 : zDateIdx;
+  const existing = new Set(
+    zValues
+      .slice(1)
+      .map((row) => (row[zDateCol] ?? "").toString().trim())
+      .filter(Boolean)
+  );
+
+  let added = 0;
+  let zRowCount = zValues.length;
+
+  for (const row of dataValues.slice(1)) {
+    const label = row[dataDateIdx];
+    if (!label) continue;
+    const key = label.toString().trim();
+    if (!key || existing.has(key)) continue;
+
+    const newRow = new Array(zHeaders.length).fill("");
+    newRow[zDateCol] = label;
+    await appendRowRange(sheets, "zscores", zHeaders.length - 1, newRow);
+    const newRowIndex = zRowCount;
+    zRowCount += 1;
+
+    const formulaStart = zDateCol + 1;
+    const formulaEnd = zHeaders.length - 1;
+    if (formulaStart <= formulaEnd && newRowIndex > 1) {
+      try {
+        await copyFormulaRange(sheets, "zscores", newRowIndex - 1, newRowIndex, formulaStart, formulaEnd);
+      } catch (error) {
+        console.error("Z-score formula copy failed", error);
+      }
+    }
+
+    existing.add(key);
+    added += 1;
+  }
+
+  if (added > 0) {
+    const updated = await getSheetValues(sheets, "zscores");
+    await sortSheetByDate(sheets, "zscores", updated);
+  }
+}
+
 async function run() {
   const sheets = google.sheets({ version: "v4", auth: getAuth() });
   for (const [month, values] of Object.entries(updates)) {
     await patchMonthlyRow(sheets, "Data", month, values);
+    await ensureZScoreRow(sheets, month);
   }
+  await syncZScoreDatesFromData(sheets);
   const updated = await getSheetValues(sheets, "Data");
   await sortSheetByDate(sheets, "Data", updated);
   console.log("Manual values patched.");

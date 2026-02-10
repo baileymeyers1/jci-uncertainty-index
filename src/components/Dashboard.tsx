@@ -152,6 +152,32 @@ export function Dashboard() {
     return data.rawScoreSeries.find((series) => series.name === target) ?? data.rawScoreSeries[0];
   }, [data, selectedSeries]);
 
+  const selectedChartData = useMemo(() => {
+    if (!selectedSeries && !selectedRawSeries) return [];
+    const dateSet = new Set<string>();
+    selectedSeries?.points.forEach((point) => {
+      if (point.date) dateSet.add(point.date);
+    });
+    selectedRawSeries?.points.forEach((point) => {
+      if (point.date) dateSet.add(point.date);
+    });
+    const dates = Array.from(dateSet).sort(compareDateLabels);
+    return dates.map((date) => ({
+      date,
+      zScore: selectedSeries?.points.find((point) => point.date === date)?.value ?? null,
+      rawScore: selectedRawSeries?.points.find((point) => point.date === date)?.value ?? null
+    }));
+  }, [selectedSeries, selectedRawSeries]);
+
+  const zScoreDomain = useMemo(
+    () => computeSeriesDomain(data?.zScoreSeries ?? []),
+    [data]
+  );
+  const rawDomain = useMemo(
+    () => computeSeriesDomain(data?.rawScoreSeries ?? []),
+    [data]
+  );
+
   if (isLoading) {
     return <p className="subtle">Loading dashboard...</p>;
   }
@@ -333,17 +359,13 @@ export function Dashboard() {
           <div className="mt-6 h-72">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
-                data={(selectedSeries?.points ?? []).map((point) => ({
-                  date: point.date,
-                  zScore: point.value,
-                  rawScore: selectedRawSeries?.points.find((raw) => raw.date === point.date)?.value ?? null
-                }))}
+                data={selectedChartData}
                 margin={{ left: 8, right: 12 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#e4dfd5" />
                 <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                <YAxis yAxisId="left" tick={{ fontSize: 12 }} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} />
+                <YAxis yAxisId="left" tick={{ fontSize: 12 }} domain={zScoreDomain} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} domain={rawDomain} />
                 <Tooltip />
                 <Line yAxisId="left" type="monotone" dataKey="zScore" stroke="#111418" strokeWidth={2} dot={false} />
                 <Line yAxisId="right" type="monotone" dataKey="rawScore" stroke="#3f7d6a" strokeWidth={2} dot={false} />
@@ -362,4 +384,38 @@ function scalePercentile(value: number | null) {
     return Math.round(value * 100 * 100) / 100;
   }
   return value;
+}
+
+function compareDateLabels(a: string, b: string) {
+  const aDate = new Date(a);
+  const bDate = new Date(b);
+  if (!Number.isNaN(aDate.getTime()) && !Number.isNaN(bDate.getTime())) {
+    return aDate.getTime() - bDate.getTime();
+  }
+  if (!Number.isNaN(aDate.getTime())) return -1;
+  if (!Number.isNaN(bDate.getTime())) return 1;
+  return a.localeCompare(b);
+}
+
+function computeSeriesDomain(series: Array<{ points: { value: number | null }[] }>) {
+  const values: number[] = [];
+  series.forEach((entry) => {
+    entry.points.forEach((point) => {
+      if (point.value !== null && point.value !== undefined && Number.isFinite(point.value)) {
+        values.push(point.value);
+      }
+    });
+  });
+  if (!values.length) return ["auto", "auto"] as const;
+  let min = Math.min(...values);
+  let max = Math.max(...values);
+  if (min === max) {
+    min -= 1;
+    max += 1;
+  } else {
+    const pad = (max - min) * 0.08;
+    min -= pad;
+    max += pad;
+  }
+  return [min, max] as const;
 }

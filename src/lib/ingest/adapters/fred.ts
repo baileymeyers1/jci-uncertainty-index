@@ -43,6 +43,25 @@ export async function fredLatestValue(seriesId: string) {
   };
 }
 
+export async function fredLatestValueBefore(seriesId: string, cutoff: Date) {
+  const observations = await fetchObservations({
+    series_id: seriesId,
+    observation_end: format(cutoff, "yyyy-MM-dd"),
+    sort_order: "desc",
+    limit: "1"
+  });
+
+  const obs = observations[0];
+  if (!obs || obs.value === ".") return null;
+  const value = Number(obs.value);
+  if (!Number.isFinite(value)) return null;
+
+  return {
+    value,
+    date: new Date(obs.date)
+  };
+}
+
 export async function fredMonthlyAverage(seriesId: string, targetMonth: Date) {
   const start = new Date(targetMonth.getFullYear(), targetMonth.getMonth(), 1);
   const end = new Date(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 0);

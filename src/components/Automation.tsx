@@ -32,6 +32,23 @@ interface HistoryResponse {
   ingestRuns: { id: string; month: string; status: string; startedAt: string; message?: string | null }[];
 }
 
+interface IngestSourceValue {
+  id: string;
+  sourceName: string;
+  value: number | null;
+  status: string;
+  message?: string | null;
+}
+
+interface IngestRunDetail {
+  id: string;
+  month: string;
+  status: string;
+  startedAt: string;
+  message?: string | null;
+  sources?: IngestSourceValue[];
+}
+
 interface WeightEntry {
   survey: string;
   weight: number | null;
@@ -55,6 +72,12 @@ async function fetchWeights() {
   return res.json() as Promise<{ weights: WeightEntry[] }>;
 }
 
+async function fetchIngestHistory(): Promise<{ ingestRuns: IngestRunDetail[] }> {
+  const res = await fetch("/api/ingest/history");
+  if (!res.ok) throw new Error("Failed to load ingest history");
+  return res.json();
+}
+
 export function Automation() {
   const queryClient = useQueryClient();
   const { data, isLoading } = useQuery({ queryKey: ["history"], queryFn: fetchHistory });
@@ -74,12 +97,93 @@ export function Automation() {
   const [sendSuccess, setSendSuccess] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [reviewRuns, setReviewRuns] = useState<IngestRunDetail[]>([]);
+  const [reviewEdits, setReviewEdits] = useState<Record<string, Record<string, string>>>({});
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewSaving, setReviewSaving] = useState(false);
   const contextComplete = context1.trim() && context2.trim() && context3.trim();
   const canSendNow =
     !!sendDraftId &&
     (sendMode === "all" ||
       (sendMode === "single" && sendEmail.trim().length > 0) ||
       (sendMode === "selected" && selectedRecipientIds.length > 0));
+
+  async function openReviewForMonths(months: string[]) {
+    try {
+      setReviewError(null);
+      const history = await fetchIngestHistory();
+      const runs = history.ingestRuns.filter((run) => months.includes(run.month));
+      const edits: Record<string, Record<string, string>> = {};
+      runs.forEach((run) => {
+        const monthEdits: Record<string, string> = {};
+        run.sources?.forEach((source) => {
+          monthEdits[source.sourceName] =
+            source.value !== null && source.value !== undefined ? String(source.value) : "";
+        });
+        edits[run.month] = monthEdits;
+      });
+      setReviewRuns(runs);
+      setReviewEdits(edits);
+      setReviewOpen(true);
+    } catch (error) {
+      setReviewError(error instanceof Error ? error.message : "Unable to load ingest review.");
+    }
+  }
+
+  function updateReviewValue(month: string, sourceName: string, value: string) {
+    setReviewEdits((prev) => ({
+      ...prev,
+      [month]: {
+        ...(prev[month] ?? {}),
+        [sourceName]: value
+      }
+    }));
+  }
+
+  async function applyReviewUpdates() {
+    if (!reviewRuns.length) {
+      setReviewOpen(false);
+      return;
+    }
+    try {
+      setReviewSaving(true);
+      setReviewError(null);
+      await Promise.all(
+        reviewRuns.map(async (run) => {
+          const rawValues = reviewEdits[run.month] ?? {};
+          const parsed: Record<string, string | number | null> = {};
+          Object.entries(rawValues).forEach(([key, value]) => {
+            const trimmed = value.trim();
+            if (!trimmed) {
+              parsed[key] = null;
+              return;
+            }
+            const num = Number(trimmed);
+            parsed[key] = Number.isFinite(num) ? num : trimmed;
+          });
+          const res = await fetch("/api/ingest/manual", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ month: run.month, values: parsed })
+          });
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(text || `Failed to update ${run.month}`);
+          }
+        })
+      );
+      setReviewOpen(false);
+      setActionSuccess("Manual updates applied.");
+      queryClient.invalidateQueries({ queryKey: ["overview"] });
+      queryClient.invalidateQueries({ queryKey: ["history"] });
+      queryClient.invalidateQueries({ queryKey: ["ingest-history"] });
+    } catch (error) {
+      setReviewError(error instanceof Error ? error.message : "Failed to apply updates.");
+    } finally {
+      setReviewSaving(false);
+    }
+  }
 
   const saveContext = useMutation({
     mutationFn: async () => {
@@ -232,29 +336,15 @@ export function Automation() {
       }
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       setActionSuccess("Ingest completed.");
       queryClient.invalidateQueries({ queryKey: ["history"] });
+      const month = data?.result?.month;
+      if (month) {
+        openReviewForMonths([month]);
+      }
     },
     onError: (err) => setActionError(err instanceof Error ? err.message : "Failed to run ingest")
-  });
-
-  const backfill = useMutation({
-    mutationFn: async () => {
-      setActionError(null);
-      setActionSuccess(null);
-      const res = await fetch("/api/ingest/backfill", { method: "POST", headers: { "Content-Type": "application/json" } });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "Failed to backfill");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      setActionSuccess("Backfill completed.");
-      queryClient.invalidateQueries({ queryKey: ["history"] });
-    },
-    onError: (err) => setActionError(err instanceof Error ? err.message : "Failed to backfill")
   });
 
   useEffect(() => {
@@ -299,9 +389,6 @@ export function Automation() {
           <div className="flex flex-wrap gap-2">
             <button className="button-secondary" onClick={() => runIngest.mutate()}>
               Run scrape now
-            </button>
-            <button className="button-secondary" onClick={() => backfill.mutate()}>
-              Backfill last 4 months
             </button>
           </div>
         </div>
@@ -511,6 +598,89 @@ export function Automation() {
           </table>
         </div>
       </section>
+
+      {reviewOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/40 p-4">
+          <div className="card max-h-[90vh] w-full max-w-5xl overflow-auto p-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="section-title">Review Scrape Results</h3>
+                <p className="subtle mt-1">Confirm values, flag no-change items, and adjust as needed.</p>
+              </div>
+              <button className="button-secondary" onClick={() => setReviewOpen(false)}>
+                Close
+              </button>
+            </div>
+
+            {reviewError ? <p className="mt-4 text-sm text-ember-600">{reviewError}</p> : null}
+
+            <div className="mt-6 space-y-6">
+              {reviewRuns.length ? (
+                reviewRuns.map((run) => (
+                  <div key={run.id} className="rounded-xl border border-sand-200 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-semibold text-ink-900">{run.month}</p>
+                      <span className="text-xs uppercase tracking-[0.2em] text-ink-600">{run.status}</span>
+                    </div>
+                    <div className="mt-3 overflow-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-left text-ink-600">
+                            <th className="py-2">Survey</th>
+                            <th className="py-2">Status</th>
+                            <th className="py-2">Value</th>
+                            <th className="py-2">Notes</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {run.sources?.map((source) => {
+                            const noChange =
+                              source.message?.includes("Carried forward prior value") ||
+                              source.message?.includes("Preserved locked historical value");
+                            return (
+                              <tr key={source.id} className="border-t border-sand-200">
+                                <td className="py-2 pr-4 font-medium">{source.sourceName}</td>
+                                <td className="py-2 text-ink-700">{noChange ? "No change" : source.status}</td>
+                                <td className="py-2">
+                                  <input
+                                    className="input w-32"
+                                    type="number"
+                                    step="0.1"
+                                    value={reviewEdits[run.month]?.[source.sourceName] ?? ""}
+                                    onChange={(e) => updateReviewValue(run.month, source.sourceName, e.target.value)}
+                                  />
+                                </td>
+                                <td className="py-2 text-xs text-ink-600">{source.message ?? "—"}</td>
+                              </tr>
+                            );
+                          }) ?? (
+                            <tr>
+                              <td className="py-2" colSpan={4}>
+                                No source values recorded.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="subtle">No recent ingest runs to review.</p>
+              )}
+            </div>
+
+            <div className="mt-6 flex flex-wrap justify-end gap-2">
+              <button className="button-secondary" onClick={() => setReviewOpen(false)}>
+                Cancel
+              </button>
+              <button className="button-primary" onClick={applyReviewUpdates} disabled={reviewSaving}>
+                {reviewSaving ? "Applying..." : "Apply updates"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

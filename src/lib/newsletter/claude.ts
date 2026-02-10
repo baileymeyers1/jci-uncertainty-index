@@ -9,6 +9,7 @@ interface ClaudeMessage {
 
 export async function callClaude(prompt: string): Promise<string> {
   const env = getEnv();
+  const model = env.CLAUDE_MODEL?.trim() || "claude-sonnet-4-20250514";
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -17,7 +18,7 @@ export async function callClaude(prompt: string): Promise<string> {
       "anthropic-version": "2023-06-01"
     },
     body: JSON.stringify({
-      model: "claude-3-5-sonnet-20241022",
+      model,
       max_tokens: 1800,
       temperature: 0.4,
       messages: [{ role: "user", content: prompt } as ClaudeMessage]
