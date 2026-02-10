@@ -25,6 +25,12 @@ interface OverviewResponse {
     percentile: number | null;
     date: string | null;
   };
+  surveyMeta: {
+    survey: string;
+    frequency: string;
+    sourceUrl: string;
+    releaseCadence: string;
+  }[];
 }
 
 async function fetchOverview(): Promise<OverviewResponse> {
@@ -69,6 +75,11 @@ export function Dashboard() {
     queryFn: fetchIngestHistory
   });
   const [selectedSurvey, setSelectedSurvey] = useState<string | null>(null);
+  const surveyMetaMap = useMemo(() => {
+    const map = new Map<string, OverviewResponse["surveyMeta"][number]>();
+    data?.surveyMeta?.forEach((item) => map.set(item.survey, item));
+    return map;
+  }, [data]);
   const scaledIndexSeries = useMemo(() => {
     if (!data) return [];
     return data.indexSeries.map((point) => ({
@@ -260,6 +271,9 @@ export function Dashboard() {
         <div className="card p-6">
           <h2 className="section-title">Survey Z-Scores</h2>
           <p className="subtle mt-1">Latest z-score values by survey.</p>
+          <p className="subtle mt-1">
+            Normalized: positive values indicate above-average uncertainty, negative values indicate below-average uncertainty.
+          </p>
           <div className="mt-4 max-h-[360px] overflow-auto">
             <table className="w-full text-sm">
               <thead>
@@ -271,6 +285,7 @@ export function Dashboard() {
               <tbody>
                 {data.zScoreSeries.map((series) => {
                   const latestPoint = [...series.points].reverse().find((p) => p.value !== null);
+                  const meta = surveyMetaMap.get(series.name);
                   const isActive = selectedSeries?.name === series.name;
                   return (
                     <tr
@@ -278,7 +293,16 @@ export function Dashboard() {
                       className={isActive ? "bg-sand-100" : ""}
                       onClick={() => setSelectedSurvey(series.name)}
                     >
-                      <td className="py-2 pr-4 font-medium text-ink-900">{series.name}</td>
+                      <td className="py-2 pr-4 font-medium text-ink-900">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span>{series.name}</span>
+                          {meta ? (
+                            <span className="rounded-full border border-sand-300 px-2 py-0.5 text-[10px] uppercase tracking-[0.2em] text-ink-600">
+                              {meta.frequency}
+                            </span>
+                          ) : null}
+                        </div>
+                      </td>
                       <td className="py-2 text-ink-700">{latestPoint?.value ?? "—"}</td>
                     </tr>
                   );

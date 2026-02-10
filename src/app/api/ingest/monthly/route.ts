@@ -13,16 +13,27 @@ export async function POST(req: Request) {
     const warningHtml = result.warnings?.length
       ? `<p>Validation warnings: ${result.warnings.join("; ")}</p>`
       : "";
-    await sendAdminAlert(
-      "JCI Uncertainty Index ingest completed",
-      `<p>Monthly ingest completed for ${result.month}.</p>${warningHtml}`
-    );
+    try {
+      await sendAdminAlert(
+        "JCI Uncertainty Index ingest completed",
+        `<p>Monthly ingest completed for ${result.month}.</p>${warningHtml}`
+      );
+    } catch (alertError) {
+      console.error("Admin alert failed", alertError);
+    }
     return NextResponse.json({ status: "ok", result });
   } catch (error) {
-    await sendAdminAlert(
-      "JCI Uncertainty Index ingest failed",
-      `<p>Monthly ingest failed: ${error instanceof Error ? error.message : "Unknown error"}</p>`
+    try {
+      await sendAdminAlert(
+        "JCI Uncertainty Index ingest failed",
+        `<p>Monthly ingest failed: ${error instanceof Error ? error.message : "Unknown error"}</p>`
+      );
+    } catch (alertError) {
+      console.error("Admin alert failed", alertError);
+    }
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Ingest failed" },
+      { status: 500 }
     );
-    return NextResponse.json({ error: "Ingest failed" }, { status: 500 });
   }
 }

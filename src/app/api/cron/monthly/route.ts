@@ -43,17 +43,25 @@ export async function POST(req: Request) {
     const warningHtml = ingestResult.warnings?.length
       ? `<p>Validation warnings: ${ingestResult.warnings.join("; ")}</p>`
       : "";
-    await sendAdminAlert(
-      "JCI Uncertainty Index monthly automation",
-      `<p>Monthly ingest completed for ${ingestResult.month}. Draft ${contextEntry ? "generated" : "skipped (no context)"}.</p>${warningHtml}`
-    );
+    try {
+      await sendAdminAlert(
+        "JCI Uncertainty Index monthly automation",
+        `<p>Monthly ingest completed for ${ingestResult.month}. Draft ${contextEntry ? "generated" : "skipped (no context)"}.</p>${warningHtml}`
+      );
+    } catch (alertError) {
+      console.error("Admin alert failed", alertError);
+    }
 
     return NextResponse.json({ status: "ok" });
   } catch (error) {
-    await sendAdminAlert(
-      "JCI Uncertainty Index monthly automation failed",
-      `<p>Monthly automation failed: ${error instanceof Error ? error.message : "Unknown error"}</p>`
-    );
+    try {
+      await sendAdminAlert(
+        "JCI Uncertainty Index monthly automation failed",
+        `<p>Monthly automation failed: ${error instanceof Error ? error.message : "Unknown error"}</p>`
+      );
+    } catch (alertError) {
+      console.error("Admin alert failed", alertError);
+    }
     return NextResponse.json({ error: "Automation failed" }, { status: 500 });
   }
 }

@@ -37,8 +37,8 @@ export const surveyAdapters: SurveyAdapter[] = [
     }
   },
   {
-    name: "NY Fed Consumer Expectations - inflation",
-    sheetHeader: "NY Fed Consumer Expectations - inflation",
+    name: "NY Fed Consumer Expectations - Inflation",
+    sheetHeader: "NY Fed Consumer Expectations - Inflation",
     frequency: "monthly",
     sourceUrl: "https://www.newyorkfed.org/microeconomics/sce#/",
     releaseCadence: "Monthly",

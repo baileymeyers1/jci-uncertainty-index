@@ -21,14 +21,14 @@ export async function runMonthlyIngest(targetMonth?: Date) {
     const metaStats = await getMetaStatsMap();
     const dataSheetValues = await getSheetValues("Data");
     const headers = dataSheetValues[0] ?? [];
-    const headerSet = new Set(headers.map((h) => h?.trim()).filter(Boolean) as string[]);
+    const headerSet = new Set(headers.map((h) => (h ? normalizeHeader(h) : "")).filter(Boolean) as string[]);
 
     const rowData: Record<string, string | number | null> = {};
     const rawHeaderSet = new Set(surveyAdapters.map((adapter) => normalizeHeader(adapter.sheetHeader)));
     let maxRawIndex = 0;
     headers.forEach((header, idx) => {
       if (idx === 0) return;
-      if (rawHeaderSet.has(normalizeHeader(header))) {
+      if (header && rawHeaderSet.has(normalizeHeader(header))) {
         maxRawIndex = Math.max(maxRawIndex, idx);
       }
     });
@@ -55,7 +55,7 @@ export async function runMonthlyIngest(targetMonth?: Date) {
         const acceptable = result.status === "success" || result.status === "warning";
 
         let carriedForward = false;
-      if (finalValue === null || !acceptable) {
+        if (finalValue === null || !acceptable) {
           const carry = latestRowMap[normalizedHeader];
           finalValue = carry ? Number(carry) : null;
           carriedForward = true;
@@ -82,9 +82,9 @@ export async function runMonthlyIngest(targetMonth?: Date) {
           }
         });
       } catch (error) {
-        const carry = latestRowMap[adapter.sheetHeader];
+        const carry = latestRowMap[normalizedHeader];
         const finalValue = carry ? Number(carry) : null;
-        rowData[adapter.sheetHeader] = finalValue;
+        rowData[normalizedHeader] = finalValue;
 
         await prisma.sourceValue.create({
           data: {

@@ -23,6 +23,12 @@ export async function generateNewsletterHTML(params: {
 }) {
   const overview = await getOverviewData();
   const latest = overview.latest;
+  const percentile =
+    latest.percentile !== null && latest.percentile !== undefined
+      ? latest.percentile <= 1
+        ? Math.round(latest.percentile * 100 * 100) / 100
+        : latest.percentile
+      : null;
 
   const searchBundles = await Promise.all(
     sections.map(async (section) => {
@@ -46,7 +52,7 @@ export async function generateNewsletterHTML(params: {
 Month: ${params.monthLabel}
 Index score: ${latest.indexScore ?? "N/A"}
 Index z-score: ${latest.indexZ ?? "N/A"}
-Index percentile: ${latest.percentile ?? "N/A"}
+Index percentile: ${percentile ?? "N/A"}
 
 Context inputs:
 1. ${params.context1}

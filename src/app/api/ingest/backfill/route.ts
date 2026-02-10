@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { subMonths } from "date-fns";
 import { runMonthlyIngest } from "@/lib/ingest/runMonthlyIngest";
+import { formatMonthLabel } from "@/lib/sheets";
 import { requireSession, unauthorized } from "@/lib/auth-guard";
 
 export async function POST(req: Request) {
@@ -13,12 +14,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid months" }, { status: 400 });
   }
 
-  const results = [];
+  const results: Array<{ month: string; status: "SUCCESS" | "FAILED"; error?: string }> = [];
   for (let i = 0; i < months; i += 1) {
     const target = subMonths(new Date(), i);
-    const result = await runMonthlyIngest(target);
-    results.push(result);
+    try {
+      const result = await runMonthlyIngest(target);
+      results.push({ month: result.month, status: "SUCCESS" });
+    } catch (error) {
+      results.push({
+        month: formatMonthLabel(target),
+        status: "FAILED",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
   }
 
-  return NextResponse.json({ status: "ok", results });
+  const failed = results.filter((result) => result.status === "FAILED");
+  return NextResponse.json({ status: failed.length ? "partial" : "ok", results });
 }

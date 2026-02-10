@@ -32,6 +32,17 @@ interface HistoryResponse {
   ingestRuns: { id: string; month: string; status: string; startedAt: string; message?: string | null }[];
 }
 
+interface WeightEntry {
+  survey: string;
+  weight: number | null;
+  mean: number | null;
+  stdev: number | null;
+  frequency: string;
+  sourceUrl: string;
+  latestValue: number | null;
+  latestZ: number | null;
+}
+
 async function fetchHistory(): Promise<HistoryResponse> {
   const res = await fetch("/api/newsletter/history");
   if (!res.ok) throw new Error("Failed to load history");
@@ -41,7 +52,7 @@ async function fetchHistory(): Promise<HistoryResponse> {
 async function fetchWeights() {
   const res = await fetch("/api/weights");
   if (!res.ok) throw new Error("Failed to load weights");
-  return res.json() as Promise<{ weights: { survey: string; weight: number | null }[] }>;
+  return res.json() as Promise<{ weights: WeightEntry[] }>;
 }
 
 export function Automation() {
@@ -55,9 +66,20 @@ export function Automation() {
   const [draftHtml, setDraftHtml] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
   const [recipientName, setRecipientName] = useState("");
+  const [sendDraftId, setSendDraftId] = useState("");
+  const [sendMode, setSendMode] = useState<"all" | "selected" | "single">("all");
+  const [sendEmail, setSendEmail] = useState("");
+  const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [sendSuccess, setSendSuccess] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const contextComplete = context1.trim() && context2.trim() && context3.trim();
+  const canSendNow =
+    !!sendDraftId &&
+    (sendMode === "all" ||
+      (sendMode === "single" && sendEmail.trim().length > 0) ||
+      (sendMode === "selected" && selectedRecipientIds.length > 0));
 
   const saveContext = useMutation({
     mutationFn: async () => {
@@ -156,12 +178,58 @@ export function Automation() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["history"] })
   });
 
+  const sendNow = useMutation({
+    mutationFn: async () => {
+      setSendError(null);
+      setSendSuccess(null);
+      if (!sendDraftId) {
+        throw new Error("Select a draft first");
+      }
+      const payload: {
+        draftId: string;
+        mode: "all" | "selected" | "single";
+        recipientIds?: string[];
+        recipientEmail?: string;
+      } = {
+        draftId: sendDraftId,
+        mode: sendMode
+      };
+      if (sendMode === "single") {
+        payload.recipientEmail = sendEmail;
+      }
+      if (sendMode === "selected") {
+        payload.recipientIds = selectedRecipientIds;
+      }
+      const res = await fetch("/api/newsletter/send-now", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Failed to send draft");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setSendSuccess(
+        sendMode === "all"
+          ? "Draft queued to send to the full list."
+          : `Draft sent to ${data.sent ?? "recipients"}.`
+      );
+    },
+    onError: (err) => setSendError(err instanceof Error ? err.message : "Failed to send draft")
+  });
+
   const runIngest = useMutation({
     mutationFn: async () => {
       setActionError(null);
       setActionSuccess(null);
       const res = await fetch("/api/ingest/monthly", { method: "POST" });
-      if (!res.ok) throw new Error("Failed to run ingest");
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Failed to run ingest");
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -197,6 +265,11 @@ export function Automation() {
     setContext2(latest.context2);
     setContext3(latest.context3);
   }, [data, context1, context2, context3]);
+
+  useEffect(() => {
+    if (sendDraftId || !data?.drafts?.length) return;
+    setSendDraftId(data.drafts[0].id);
+  }, [data, sendDraftId]);
 
   const updateWeight = useMutation({
     mutationFn: async (payload: { survey: string; weight: number }) => {
@@ -304,13 +377,85 @@ export function Automation() {
             </div>
           </div>
           <ul className="mt-4 space-y-2 text-sm">
-            {data.recipients.map((recipient) => (
-              <li key={recipient.id} className="flex items-center justify-between border-b border-sand-200 pb-2">
-                <span>{recipient.email}</span>
-                <span className="subtle">{recipient.name ?? ""}</span>
-              </li>
-            ))}
+            {data.recipients.map((recipient) => {
+              const isSelected = selectedRecipientIds.includes(recipient.id);
+              return (
+                <li key={recipient.id} className="flex items-center justify-between border-b border-sand-200 pb-2">
+                  <div className="flex items-center gap-2">
+                    {sendMode === "selected" ? (
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {
+                          setSelectedRecipientIds((prev) =>
+                            prev.includes(recipient.id)
+                              ? prev.filter((id) => id !== recipient.id)
+                              : [...prev, recipient.id]
+                          );
+                        }}
+                      />
+                    ) : null}
+                    <span>{recipient.email}</span>
+                  </div>
+                  <span className="subtle">{recipient.name ?? ""}</span>
+                </li>
+              );
+            })}
           </ul>
+          <div className="mt-6 border-t border-sand-200 pt-4">
+            <h3 className="font-semibold text-ink-900">Send Draft Now</h3>
+            <p className="subtle mt-1">Blast a draft to a single recipient, a selection, or the full list.</p>
+            <div className="mt-3 grid gap-3">
+              <label className="text-sm text-ink-700">
+                Draft
+                <select
+                  className="input mt-1"
+                  value={sendDraftId}
+                  onChange={(e) => setSendDraftId(e.target.value)}
+                >
+                  {data.drafts.map((draft) => (
+                    <option key={draft.id} value={draft.id}>
+                      {draft.month} ({draft.status})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-sm text-ink-700">
+                Send to
+                <select
+                  className="input mt-1"
+                  value={sendMode}
+                  onChange={(e) => {
+                    const mode = e.target.value as "all" | "selected" | "single";
+                    setSendMode(mode);
+                    if (mode !== "selected") {
+                      setSelectedRecipientIds([]);
+                    }
+                  }}
+                >
+                  <option value="all">Entire list</option>
+                  <option value="selected">Selected recipients</option>
+                  <option value="single">Single email</option>
+                </select>
+              </label>
+              {sendMode === "single" ? (
+                <input
+                  className="input"
+                  value={sendEmail}
+                  onChange={(e) => setSendEmail(e.target.value)}
+                  placeholder="Recipient email"
+                />
+              ) : null}
+              {sendMode === "selected" ? (
+                <p className="text-xs text-ink-600">Use the checkboxes above to choose recipients.</p>
+              ) : null}
+              <button className="button-primary" onClick={() => sendNow.mutate()} disabled={!canSendNow}>
+                Send draft now
+              </button>
+              {sendError ? <p className="text-sm text-ember-600">{sendError}</p> : null}
+              {sendSuccess ? <p className="text-sm text-moss-600">{sendSuccess}</p> : null}
+            </div>
+          </div>
         </div>
         <div className="card p-6">
           <h2 className="section-title">Ingest Runs</h2>
@@ -337,13 +482,30 @@ export function Automation() {
             <thead>
               <tr className="text-left text-ink-600">
                 <th className="py-2">Survey</th>
+                <th className="py-2">Frequency</th>
+                <th className="py-2">Source</th>
+                <th className="py-2">Mean</th>
+                <th className="py-2">Stdev</th>
+                <th className="py-2">Latest Score</th>
+                <th className="py-2">Latest Z</th>
                 <th className="py-2">Weight</th>
                 <th className="py-2"></th>
               </tr>
             </thead>
             <tbody>
               {weightsData?.weights?.map((item) => (
-                <WeightRow key={item.survey} survey={item.survey} weight={item.weight} onSave={updateWeight.mutate} />
+                <WeightRow
+                  key={item.survey}
+                  survey={item.survey}
+                  weight={item.weight}
+                  mean={item.mean}
+                  stdev={item.stdev}
+                  frequency={item.frequency}
+                  sourceUrl={item.sourceUrl}
+                  latestValue={item.latestValue}
+                  latestZ={item.latestZ}
+                  onSave={updateWeight.mutate}
+                />
               ))}
             </tbody>
           </table>
@@ -356,10 +518,22 @@ export function Automation() {
 function WeightRow({
   survey,
   weight,
+  mean,
+  stdev,
+  frequency,
+  sourceUrl,
+  latestValue,
+  latestZ,
   onSave
 }: {
   survey: string;
   weight: number | null;
+  mean: number | null;
+  stdev: number | null;
+  frequency: string;
+  sourceUrl: string;
+  latestValue: number | null;
+  latestZ: number | null;
   onSave: (payload: { survey: string; weight: number }) => void;
 }) {
   const [value, setValue] = useState(weight?.toString() ?? "");
@@ -367,6 +541,16 @@ function WeightRow({
   return (
     <tr className="border-t border-sand-200">
       <td className="py-2 pr-4 font-medium">{survey}</td>
+      <td className="py-2 text-ink-700 uppercase tracking-[0.2em] text-[10px]">{frequency}</td>
+      <td className="py-2">
+        <a className="text-ink-700 underline" href={sourceUrl} target="_blank" rel="noreferrer">
+          Source
+        </a>
+      </td>
+      <td className="py-2 text-ink-700">{mean ?? "—"}</td>
+      <td className="py-2 text-ink-700">{stdev ?? "—"}</td>
+      <td className="py-2 text-ink-700">{latestValue ?? "—"}</td>
+      <td className="py-2 text-ink-700">{latestZ ?? "—"}</td>
       <td className="py-2">
         <input
           className="input w-24"

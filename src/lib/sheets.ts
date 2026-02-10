@@ -20,7 +20,7 @@ export async function getSheetValues(sheetName: string): Promise<SheetValues> {
   const sheets = google.sheets({ version: "v4", auth: getAuth() });
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: env.GOOGLE_SHEET_ID,
-    range: `${sheetName}!A:Z`
+    range: `${sheetName}!A:AZ`
   });
   return (res.data.values as string[][]) ?? [];
 }
@@ -65,7 +65,7 @@ export async function appendRow(sheetName: string, row: string[]) {
   const sheets = google.sheets({ version: "v4", auth: getAuth() });
   await sheets.spreadsheets.values.append({
     spreadsheetId: env.GOOGLE_SHEET_ID,
-    range: `${sheetName}!A:Z`,
+    range: `${sheetName}!A:AZ`,
     valueInputOption: "USER_ENTERED",
     requestBody: { values: [row] }
   });
@@ -290,19 +290,28 @@ export async function getOverviewData() {
   const dataHeaders = getHeaderMap(dataValues);
   const zHeaders = getHeaderMap(zValues);
   const dataHeaderSet = new Set(Array.from(dataHeaders.keys()));
+  const dataHeaderLowerSet = new Set(Array.from(dataHeaders.keys()).map((header) => header.toLowerCase()));
 
-  const dateIdx = dataHeaders.get("DATE") ?? 0;
-  const indexScoreIdx = dataHeaders.get("UNCERTAINTY INDEX");
-  const percentileIdx = dataHeaders.get("INDEX PERCENTILE");
+  const dateKey = normalizeHeader("DATE");
+  const dateIdx = dataHeaders.get(dateKey) ?? 0;
+  const indexScoreIdx = dataHeaders.get(normalizeHeader("UNCERTAINTY INDEX"));
+  const percentileIdx = dataHeaders.get(normalizeHeader("INDEX PERCENTILE"));
 
-  const zDateIdx = zHeaders.get("DATE") ?? 0;
-  const indexZIdx = zHeaders.get("INDEX (z score)");
+  const zDateIdx = zHeaders.get(dateKey) ?? 0;
+  const indexZIdx = zHeaders.get(normalizeHeader("INDEX (z score)"));
 
-  const indexSeries = dataValues.slice(1).map((row) => {
+  const dataRows = dataValues.slice(1).filter((row) => row[dateIdx]);
+  const zRows = zValues.slice(1).filter((row) => row[zDateIdx]);
+  const zRowMap = new Map<string, string[]>();
+  zRows.forEach((row) => {
+    zRowMap.set(row[zDateIdx], row);
+  });
+
+  const indexSeries = dataRows.map((row) => {
     const date = row[dateIdx];
     const indexScore = indexScoreIdx !== undefined ? parseNumber(row[indexScoreIdx]) : null;
     const percentile = percentileIdx !== undefined ? parseNumber(row[percentileIdx]) : null;
-    const zRow = zValues.find((zRow) => zRow[zDateIdx] === date);
+    const zRow = zRowMap.get(date);
     const indexZ = zRow && indexZIdx !== undefined ? parseNumber(zRow[indexZIdx]) : null;
 
     return {
@@ -314,10 +323,13 @@ export async function getOverviewData() {
   });
 
   const zScoreSeries = Array.from(zHeaders.entries())
-    .filter(([header]) => header !== "DATE" && !header.startsWith("INDEX"))
-    .filter(([header]) => dataHeaderSet.has(header))
+    .filter(([header]) => {
+      const normalized = header.toUpperCase();
+      return normalized !== "DATE" && !normalized.startsWith("INDEX");
+    })
+    .filter(([header]) => dataHeaderSet.has(header) || dataHeaderLowerSet.has(header.toLowerCase()))
     .map(([header, idx]) => {
-      const points = zValues.slice(1).map((row) => {
+      const points = zRows.map((row) => {
         const value = parseNumber(row[idx]);
         return {
           date: row[zDateIdx],
@@ -327,16 +339,16 @@ export async function getOverviewData() {
       return { name: header, points };
     });
 
-  const latest = indexSeries[indexSeries.length - 1];
+  const latest = indexSeries.length ? indexSeries[indexSeries.length - 1] : null;
 
   return {
     indexSeries,
     zScoreSeries,
     latest: {
-      indexScore: latest?.indexScore ?? null,
-      indexZ: latest?.indexZ ?? null,
-      percentile: latest?.percentile ?? null,
-      date: latest?.date ?? null
+      indexScore: latest ? latest.indexScore : null,
+      indexZ: latest ? latest.indexZ : null,
+      percentile: latest ? latest.percentile : null,
+      date: latest ? latest.date : null
     }
   };
 }
@@ -393,5 +405,24 @@ export async function getZScoresForMonths(monthLabels: string[]) {
     map.set(date, record);
   });
 
+  return map;
+}
+
+export async function getLatestZScoreRowMap() {
+  const values = await getSheetValues("zscores");
+  const headers = values[0] ?? [];
+  const dateIdx = headers.findIndex((h) => normalizeHeader(h) === "DATE");
+  let lastRow: string[] = [];
+  for (let i = values.length - 1; i >= 1; i -= 1) {
+    if (values[i] && values[i][dateIdx]) {
+      lastRow = values[i];
+      break;
+    }
+  }
+  const map: Record<string, number | null> = {};
+  headers.forEach((header, idx) => {
+    if (!header || normalizeHeader(header) === "DATE") return;
+    map[normalizeHeader(header)] = parseNumber(lastRow[idx]);
+  });
   return map;
 }

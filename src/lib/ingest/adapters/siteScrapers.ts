@@ -21,7 +21,9 @@ export async function scrapeNyFedInflationMedian() {
   const value = matchNumber(
     [
       /Median inflation expectations[^.]*?to\s+([0-9]+(?:\.[0-9]+)?)\s*percent[^.]*one-year-ahead/i,
-      /Median inflation expectations[^.]*?to\s+([0-9]+(?:\.[0-9]+)?)\s*percent[^.]*one year/i
+      /Median inflation expectations[^.]*?to\s+([0-9]+(?:\.[0-9]+)?)\s*percent[^.]*one year/i,
+      /Median inflation expectations[^.]*?to\s+([0-9]+(?:\.[0-9]+)?)\s*percent[^.]*one-year-ahead horizon/i,
+      /Median inflation expectations[^.]*?one-year-ahead[^.]*?to\s+([0-9]+(?:\.[0-9]+)?)\s*percent/i
     ],
     text
   );
