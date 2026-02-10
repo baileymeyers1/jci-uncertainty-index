@@ -2,7 +2,7 @@ import "server-only";
 
 import { prisma } from "@/lib/prisma";
 import { surveyAdapters } from "@/lib/ingest/adapters/sources";
-import { formatMonthLabel, getLatestDataRowMap, getMetaStatsMap, getSheetValues, normalizeHeader, upsertMonthlyRowPartial } from "@/lib/sheets";
+import { formatMonthLabel, getLatestDataRowMapForMonth, getMetaStatsMap, getSheetValues, normalizeHeader, upsertMonthlyRowPartial } from "@/lib/sheets";
 import { format } from "date-fns";
 
 export async function runMonthlyIngest(targetMonth?: Date) {
@@ -17,7 +17,7 @@ export async function runMonthlyIngest(targetMonth?: Date) {
   });
 
   try {
-    const latestRowMap = await getLatestDataRowMap();
+    const latestRowMap = await getLatestDataRowMapForMonth(monthDate);
     const metaStats = await getMetaStatsMap();
     const dataSheetValues = await getSheetValues("Data");
     const headers = dataSheetValues[0] ?? [];

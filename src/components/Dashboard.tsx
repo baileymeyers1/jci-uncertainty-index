@@ -16,9 +16,15 @@ interface ZScoreSeries {
   points: { date: string; value: number | null }[];
 }
 
+interface RawSeries {
+  name: string;
+  points: { date: string; value: number | null }[];
+}
+
 interface OverviewResponse {
   indexSeries: IndexPoint[];
   zScoreSeries: ZScoreSeries[];
+  rawScoreSeries: RawSeries[];
   latest: {
     indexScore: number | null;
     indexZ: number | null;
@@ -139,6 +145,12 @@ export function Dashboard() {
     const target = selectedSurvey ?? data.zScoreSeries[0].name;
     return data.zScoreSeries.find((series) => series.name === target) ?? data.zScoreSeries[0];
   }, [data, selectedSurvey]);
+
+  const selectedRawSeries = useMemo(() => {
+    if (!data?.rawScoreSeries?.length) return null;
+    const target = selectedSeries?.name ?? data.rawScoreSeries[0]?.name;
+    return data.rawScoreSeries.find((series) => series.name === target) ?? data.rawScoreSeries[0];
+  }, [data, selectedSeries]);
 
   if (isLoading) {
     return <p className="subtle">Loading dashboard...</p>;
@@ -279,12 +291,15 @@ export function Dashboard() {
               <thead>
                 <tr className="text-left text-ink-600">
                   <th className="py-2">Survey</th>
+                  <th className="py-2">Latest Score</th>
                   <th className="py-2">Latest Z</th>
                 </tr>
               </thead>
               <tbody>
                 {data.zScoreSeries.map((series) => {
                   const latestPoint = [...series.points].reverse().find((p) => p.value !== null);
+                  const rawSeries = data.rawScoreSeries.find((entry) => entry.name === series.name);
+                  const latestRaw = rawSeries ? [...rawSeries.points].reverse().find((p) => p.value !== null) : null;
                   const meta = surveyMetaMap.get(series.name);
                   const isActive = selectedSeries?.name === series.name;
                   return (
@@ -303,6 +318,7 @@ export function Dashboard() {
                           ) : null}
                         </div>
                       </td>
+                      <td className="py-2 text-ink-700">{latestRaw?.value ?? "—"}</td>
                       <td className="py-2 text-ink-700">{latestPoint?.value ?? "—"}</td>
                     </tr>
                   );
@@ -316,12 +332,21 @@ export function Dashboard() {
           <p className="subtle mt-1">{selectedSeries?.name ?? "Select a survey"}</p>
           <div className="mt-6 h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={selectedSeries?.points ?? []} margin={{ left: 8, right: 12 }}>
+              <LineChart
+                data={(selectedSeries?.points ?? []).map((point) => ({
+                  date: point.date,
+                  zScore: point.value,
+                  rawScore: selectedRawSeries?.points.find((raw) => raw.date === point.date)?.value ?? null
+                }))}
+                margin={{ left: 8, right: 12 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="#e4dfd5" />
                 <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
+                <YAxis yAxisId="left" tick={{ fontSize: 12 }} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} />
                 <Tooltip />
-                <Line type="monotone" dataKey="value" stroke="#111418" strokeWidth={2} dot={false} />
+                <Line yAxisId="left" type="monotone" dataKey="zScore" stroke="#111418" strokeWidth={2} dot={false} />
+                <Line yAxisId="right" type="monotone" dataKey="rawScore" stroke="#3f7d6a" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>

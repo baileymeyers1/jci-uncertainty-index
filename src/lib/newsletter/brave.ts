@@ -8,7 +8,11 @@ interface BraveResult {
   description: string;
 }
 
-export async function braveSearch(query: string): Promise<BraveResult[]> {
+async function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function braveSearch(query: string, attempt = 1): Promise<BraveResult[]> {
   const env = getEnv();
   const params = new URLSearchParams({
     q: query,
@@ -24,6 +28,13 @@ export async function braveSearch(query: string): Promise<BraveResult[]> {
   });
 
   if (!res.ok) {
+    if (res.status === 429 && attempt < 3) {
+      await delay(500 * attempt);
+      return braveSearch(query, attempt + 1);
+    }
+    if (res.status === 429) {
+      return [];
+    }
     throw new Error(`Brave search failed (${res.status})`);
   }
 

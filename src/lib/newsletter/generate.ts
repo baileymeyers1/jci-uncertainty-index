@@ -33,8 +33,12 @@ export async function generateNewsletterHTML(params: {
   const searchBundles = await Promise.all(
     sections.map(async (section) => {
       const query = `${section} uncertainty drivers ${params.monthLabel}`;
-      const results = await braveSearch(query);
-      return { section, results };
+      try {
+        const results = await braveSearch(query);
+        return { section, results };
+      } catch (error) {
+        return { section, results: [] as { title: string; url: string; description: string }[] };
+      }
     })
   );
 

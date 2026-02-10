@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { subMonths } from "date-fns";
 import { runMonthlyIngest } from "@/lib/ingest/runMonthlyIngest";
-import { formatMonthLabel } from "@/lib/sheets";
+import { formatMonthLabel, sortSheetByDate } from "@/lib/sheets";
 import { requireSession, unauthorized } from "@/lib/auth-guard";
 
 export async function POST(req: Request) {
@@ -30,5 +30,10 @@ export async function POST(req: Request) {
   }
 
   const failed = results.filter((result) => result.status === "FAILED");
+  try {
+    await sortSheetByDate("Data");
+  } catch (error) {
+    console.error("Failed to sort sheet", error);
+  }
   return NextResponse.json({ status: failed.length ? "partial" : "ok", results });
 }
