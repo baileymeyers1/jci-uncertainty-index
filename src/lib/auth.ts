@@ -2,7 +2,6 @@ import "server-only";
 
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { compare, hash } from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { getAuthEnv } from "@/lib/env";
@@ -22,8 +21,7 @@ async function ensureBootstrapUser() {
 }
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
-  session: { strategy: "database" },
+  session: { strategy: "jwt" },
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -54,6 +52,14 @@ export const authOptions: NextAuthOptions = {
       }
     })
   ],
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.sub = user.id;
+      }
+      return token;
+    }
+  },
   pages: {
     signIn: "/login"
   }
