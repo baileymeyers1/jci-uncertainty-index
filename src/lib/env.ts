@@ -20,11 +20,25 @@ const envSchema = z.object({
   CRON_SECRET: z.string().min(1)
 });
 
+const authSchema = z.object({
+  NEXTAUTH_SECRET: z.string().min(1),
+  ADMIN_BOOTSTRAP_EMAIL: z.string().email(),
+  ADMIN_BOOTSTRAP_PASSWORD: z.string().min(8)
+});
+
 let cachedEnv: z.infer<typeof envSchema> | null = null;
+let cachedAuthEnv: z.infer<typeof authSchema> | null = null;
 
 export function getEnv() {
   if (!cachedEnv) {
     cachedEnv = envSchema.parse(process.env);
   }
   return cachedEnv;
+}
+
+export function getAuthEnv() {
+  if (!cachedAuthEnv) {
+    cachedAuthEnv = authSchema.parse(process.env);
+  }
+  return cachedAuthEnv;
 }

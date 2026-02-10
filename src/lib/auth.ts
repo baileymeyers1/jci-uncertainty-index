@@ -5,10 +5,10 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { compare, hash } from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-import { getEnv } from "@/lib/env";
+import { getAuthEnv } from "@/lib/env";
 
 async function ensureBootstrapUser() {
-  const env = getEnv();
+  const env = getAuthEnv();
   const existing = await prisma.user.findFirst();
   if (existing) return;
   const passwordHash = await hash(env.ADMIN_BOOTSTRAP_PASSWORD, 12);
