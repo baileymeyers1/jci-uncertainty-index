@@ -85,7 +85,7 @@ export function Dashboard() {
       row.date,
       row.indexScore ?? "",
       row.indexZ ?? "",
-      row.percentile ?? ""
+      scalePercentile(row.percentile) ?? ""
     ]);
     const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });

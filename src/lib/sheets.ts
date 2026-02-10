@@ -204,6 +204,11 @@ export async function upsertMonthlyRowPartial(params: {
   }
 
   await updateRowRange(sheetName, rowIndex, 0, maxRawIndex, row);
+  const computedStart = maxRawIndex + 1;
+  const computedEnd = headerOrder.length - 1;
+  if (computedStart <= computedEnd && rowIndex > 1) {
+    await copyFormulaRange(sheetName, rowIndex - 1, rowIndex, computedStart, computedEnd);
+  }
   return { action: "update" as const };
 }
 
