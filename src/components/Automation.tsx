@@ -55,31 +55,52 @@ export function Automation() {
   const [draftHtml, setDraftHtml] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
   const [recipientName, setRecipientName] = useState("");
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const contextComplete = context1.trim() && context2.trim() && context3.trim();
 
   const saveContext = useMutation({
     mutationFn: async () => {
+      setActionError(null);
+      setActionSuccess(null);
       const res = await fetch("/api/context", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ context1, context2, context3 })
       });
-      if (!res.ok) throw new Error("Failed to save context");
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Failed to save context");
+      }
       return res.json();
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["history"] })
+    onSuccess: () => {
+      setActionSuccess("Context saved.");
+      queryClient.invalidateQueries({ queryKey: ["history"] });
+    },
+    onError: (err) => setActionError(err instanceof Error ? err.message : "Failed to save context")
   });
 
   const generateDraft = useMutation({
     mutationFn: async () => {
+      setActionError(null);
+      setActionSuccess(null);
       const res = await fetch("/api/newsletter/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ context1, context2, context3 })
       });
-      if (!res.ok) throw new Error("Failed to generate draft");
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Failed to generate draft");
+      }
       return res.json();
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["history"] })
+    onSuccess: () => {
+      setActionSuccess("Draft generated.");
+      queryClient.invalidateQueries({ queryKey: ["history"] });
+    },
+    onError: (err) => setActionError(err instanceof Error ? err.message : "Failed to generate draft")
   });
 
   const queueSend = useMutation({
@@ -137,11 +158,35 @@ export function Automation() {
 
   const runIngest = useMutation({
     mutationFn: async () => {
+      setActionError(null);
+      setActionSuccess(null);
       const res = await fetch("/api/ingest/monthly", { method: "POST" });
       if (!res.ok) throw new Error("Failed to run ingest");
       return res.json();
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["history"] })
+    onSuccess: () => {
+      setActionSuccess("Ingest completed.");
+      queryClient.invalidateQueries({ queryKey: ["history"] });
+    },
+    onError: (err) => setActionError(err instanceof Error ? err.message : "Failed to run ingest")
+  });
+
+  const backfill = useMutation({
+    mutationFn: async () => {
+      setActionError(null);
+      setActionSuccess(null);
+      const res = await fetch("/api/ingest/backfill", { method: "POST", headers: { "Content-Type": "application/json" } });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Failed to backfill");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      setActionSuccess("Backfill completed.");
+      queryClient.invalidateQueries({ queryKey: ["history"] });
+    },
+    onError: (err) => setActionError(err instanceof Error ? err.message : "Failed to backfill")
   });
 
   useEffect(() => {
@@ -178,7 +223,14 @@ export function Automation() {
             <h2 className="section-title">Monthly Context</h2>
             <p className="subtle">Provide three context inputs for Claude to weave into the analysis.</p>
           </div>
-          <button className="button-secondary" onClick={() => runIngest.mutate()}>Run scrape now</button>
+          <div className="flex flex-wrap gap-2">
+            <button className="button-secondary" onClick={() => runIngest.mutate()}>
+              Run scrape now
+            </button>
+            <button className="button-secondary" onClick={() => backfill.mutate()}>
+              Backfill last 4 months
+            </button>
+          </div>
         </div>
         <div className="grid gap-4 md:grid-cols-3">
           <textarea className="textarea" value={context1} onChange={(e) => setContext1(e.target.value)} placeholder="Context 1" />
@@ -186,9 +238,15 @@ export function Automation() {
           <textarea className="textarea" value={context3} onChange={(e) => setContext3(e.target.value)} placeholder="Context 3" />
         </div>
         <div className="flex flex-wrap gap-3">
-          <button className="button-secondary" onClick={() => saveContext.mutate()}>Save context</button>
-          <button className="button-primary" onClick={() => generateDraft.mutate()}>Generate draft</button>
+          <button className="button-secondary" onClick={() => saveContext.mutate()} disabled={!contextComplete}>
+            Save context
+          </button>
+          <button className="button-primary" onClick={() => generateDraft.mutate()} disabled={!contextComplete}>
+            Generate draft
+          </button>
         </div>
+        {actionError ? <p className="text-sm text-ember-600">{actionError}</p> : null}
+        {actionSuccess ? <p className="text-sm text-moss-600">{actionSuccess}</p> : null}
       </section>
 
       <section className="grid gap-6 lg:grid-cols-[2fr,3fr]">

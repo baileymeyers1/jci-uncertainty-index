@@ -2,7 +2,7 @@ import "server-only";
 
 import { prisma } from "@/lib/prisma";
 import { surveyAdapters } from "@/lib/ingest/adapters/sources";
-import { formatMonthLabel, getLatestDataRowMap, getMetaStatsMap, getSheetValues, upsertMonthlyRow } from "@/lib/sheets";
+import { formatMonthLabel, getLatestDataRowMap, getMetaStatsMap, getSheetValues, normalizeHeader, upsertMonthlyRowPartial } from "@/lib/sheets";
 import { format } from "date-fns";
 
 export async function runMonthlyIngest(targetMonth?: Date) {
@@ -24,10 +24,19 @@ export async function runMonthlyIngest(targetMonth?: Date) {
     const headerSet = new Set(headers.map((h) => h?.trim()).filter(Boolean) as string[]);
 
     const rowData: Record<string, string | number | null> = {};
+    const rawHeaderSet = new Set(surveyAdapters.map((adapter) => normalizeHeader(adapter.sheetHeader)));
+    let maxRawIndex = 0;
+    headers.forEach((header, idx) => {
+      if (idx === 0) return;
+      if (rawHeaderSet.has(normalizeHeader(header))) {
+        maxRawIndex = Math.max(maxRawIndex, idx);
+      }
+    });
     const warnings: string[] = [];
 
     for (const adapter of surveyAdapters) {
-      if (!headerSet.has(adapter.sheetHeader)) {
+      const normalizedHeader = normalizeHeader(adapter.sheetHeader);
+      if (!headerSet.has(normalizedHeader)) {
         await prisma.sourceValue.create({
           data: {
             ingestId: ingestRun.id,
@@ -46,14 +55,14 @@ export async function runMonthlyIngest(targetMonth?: Date) {
         const acceptable = result.status === "success" || result.status === "warning";
 
         let carriedForward = false;
-        if (finalValue === null || !acceptable) {
-          const carry = latestRowMap[adapter.sheetHeader];
+      if (finalValue === null || !acceptable) {
+          const carry = latestRowMap[normalizedHeader];
           finalValue = carry ? Number(carry) : null;
           carriedForward = true;
         }
 
-        rowData[adapter.sheetHeader] = finalValue;
-        const validation = validateValue(adapter.sheetHeader, finalValue, metaStats);
+        rowData[normalizedHeader] = finalValue;
+        const validation = validateValue(normalizedHeader, finalValue, metaStats);
         const status = validation ? "warning" : result.status;
         if (validation) {
           warnings.push(`${adapter.sheetHeader}: ${validation}`);
@@ -91,7 +100,13 @@ export async function runMonthlyIngest(targetMonth?: Date) {
       }
     }
 
-    await upsertMonthlyRow("Data", monthLabel, headers, rowData);
+    await upsertMonthlyRowPartial({
+      sheetName: "Data",
+      dateLabel: monthLabel,
+      headerOrder: headers,
+      data: rowData,
+      maxRawIndex
+    });
 
     const message = warnings.length
       ? `Ingest completed with ${warnings.length} validation warnings: ${warnings.join("; ")}`

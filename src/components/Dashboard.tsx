@@ -41,6 +41,14 @@ interface IngestRun {
   status: string;
   startedAt: string;
   message?: string | null;
+  sources?: {
+    id: string;
+    sourceName: string;
+    value: number | null;
+    status: string;
+    message?: string | null;
+  }[];
+  zscores?: Record<string, number | null>;
 }
 
 async function fetchIngestHistory(): Promise<{ ingestRuns: IngestRun[] }> {
@@ -61,6 +69,14 @@ export function Dashboard() {
     queryFn: fetchIngestHistory
   });
   const [selectedSurvey, setSelectedSurvey] = useState<string | null>(null);
+  const scaledIndexSeries = useMemo(() => {
+    if (!data) return [];
+    return data.indexSeries.map((point) => ({
+      ...point,
+      percentile: scalePercentile(point.percentile)
+    }));
+  }, [data]);
+  const latestPercentile = scalePercentile(data?.latest.percentile ?? null);
 
   function exportCsv() {
     if (!data) return;
@@ -143,7 +159,7 @@ export function Dashboard() {
         </div>
         <div className="card p-6">
           <p className="text-sm uppercase tracking-[0.2em] text-ink-600">Index Percentile</p>
-          <p className="mt-2 text-3xl font-serif">{data.latest.percentile ?? "—"}</p>
+          <p className="mt-2 text-3xl font-serif">{latestPercentile ?? "—"}</p>
           <p className="subtle mt-2">Latest: {data.latest.date ?? "—"}</p>
         </div>
       </section>
@@ -153,7 +169,7 @@ export function Dashboard() {
         <p className="subtle mt-1">Score, z-score, and percentile over time.</p>
         <div className="mt-6 h-72">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data.indexSeries} margin={{ left: 8, right: 12 }}>
+            <LineChart data={scaledIndexSeries} margin={{ left: 8, right: 12 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e4dfd5" />
               <XAxis dataKey="date" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} />
@@ -172,15 +188,67 @@ export function Dashboard() {
         <div className="mt-4 space-y-3 text-sm">
           {ingestData?.ingestRuns?.length ? (
             ingestData.ingestRuns.map((run) => (
-              <div key={run.id} className="border-b border-sand-200 pb-3">
-                <div className="flex items-center justify-between">
+              <details key={run.id} className="border-b border-sand-200 pb-3">
+                <summary className="flex cursor-pointer list-none items-center justify-between">
                   <span className="font-medium">{run.month}</span>
                   <span className={run.status === "SUCCESS" ? "text-moss-600" : "text-ember-600"}>
                     {run.status}
                   </span>
+                </summary>
+                {run.message ? <p className="subtle mt-2">{run.message}</p> : null}
+                <div className="mt-3 grid gap-4 md:grid-cols-2">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-ink-600">Raw Values</p>
+                    <div className="mt-2 max-h-40 overflow-auto border border-sand-200 rounded-xl">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-left text-ink-600">
+                            <th className="py-2 px-3">Survey</th>
+                            <th className="py-2 px-3">Value</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {run.sources?.map((source) => (
+                            <tr key={source.id} className="border-t border-sand-200">
+                              <td className="py-2 px-3">{source.sourceName}</td>
+                              <td className="py-2 px-3">{source.value ?? "—"}</td>
+                            </tr>
+                          )) ?? (
+                            <tr>
+                              <td className="py-2 px-3" colSpan={2}>
+                                —
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-ink-600">Z-Scores</p>
+                    <div className="mt-2 max-h-40 overflow-auto border border-sand-200 rounded-xl">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-left text-ink-600">
+                            <th className="py-2 px-3">Survey</th>
+                            <th className="py-2 px-3">Z</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {run.zscores
+                            ? Object.entries(run.zscores).map(([name, value]) => (
+                                <tr key={name} className="border-t border-sand-200">
+                                  <td className="py-2 px-3">{name}</td>
+                                  <td className="py-2 px-3">{value ?? "—"}</td>
+                                </tr>
+                              ))
+                            : null}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
-                {run.message ? <p className="subtle mt-1">{run.message}</p> : null}
-              </div>
+              </details>
             ))
           ) : (
             <p className="subtle">No ingest runs yet.</p>
@@ -237,4 +305,12 @@ export function Dashboard() {
       </section>
     </div>
   );
+}
+
+function scalePercentile(value: number | null) {
+  if (value === null || value === undefined) return null;
+  if (value <= 1) {
+    return Math.round(value * 100 * 100) / 100;
+  }
+  return value;
 }

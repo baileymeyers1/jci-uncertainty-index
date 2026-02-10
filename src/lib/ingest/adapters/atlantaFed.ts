@@ -17,69 +17,51 @@ export async function getSbuSeriesValue(params: {
 
   const buffer = Buffer.from(await res.arrayBuffer());
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  const sheet = workbook.Sheets["Index Values (smoothed)"];
+  if (!sheet) return null;
 
-  const keywords =
+  const rows = XLSX.utils.sheet_to_json(sheet, {
+    header: 1,
+    raw: true,
+    defval: null
+  }) as Array<Array<unknown>>;
+
+  const headerRowIndex = rows.findIndex((row) =>
+    row.some((cell) => typeof cell === "string" && cell.toLowerCase().includes("empgrowthunc_percent"))
+  );
+  if (headerRowIndex === -1) return null;
+
+  const headerRow = rows[headerRowIndex];
+  const dateCol = headerRow.findIndex((cell) => typeof cell === "string" && cell.toLowerCase() === "date");
+  const valueCol =
     params.series === "empgrowth"
-      ? ["empgrowth", "employment", "emp growth", "employment growth"]
-      : ["revgrowth", "revenue", "rev growth", "revenue growth"];
+      ? headerRow.findIndex(
+          (cell) => typeof cell === "string" && cell.toLowerCase() === "empgrowthunc_percent"
+        )
+      : headerRow.findIndex(
+          (cell) => typeof cell === "string" && cell.toLowerCase() === "salesrevgrowthunc_percent"
+        );
 
-  for (const sheetName of workbook.SheetNames) {
-    const sheet = workbook.Sheets[sheetName];
-    if (!sheet) continue;
+  if (dateCol === -1 || valueCol === -1) return null;
 
-    const rows = XLSX.utils.sheet_to_json(sheet, {
-      header: 1,
-      raw: true,
-      defval: null
-    }) as Array<Array<unknown>>;
+  const observations = rows.slice(headerRowIndex + 1);
+  const pairs = observations
+    .map((row) => {
+      const date = normalizeDate(row[dateCol]);
+      const value = toNumber(row[valueCol]);
+      return date && Number.isFinite(value) ? { date, value: value as number } : null;
+    })
+    .filter(Boolean) as { date: Date; value: number }[];
 
-    const headerInfo = findHeaderRow(rows, keywords);
-    if (!headerInfo) continue;
+  if (!pairs.length) return null;
 
-    const { headerRowIndex, dateCol, valueCol } = headerInfo;
-    const observations = rows.slice(headerRowIndex + 1);
+  const cutoff = endOfMonth(params.targetMonth);
+  const sorted = pairs
+    .filter((pair) => pair.date <= cutoff)
+    .sort((a, b) => b.date.getTime() - a.date.getTime());
 
-    const pairs = observations
-      .map((row) => {
-        const date = normalizeDate(row[dateCol]);
-        const value = toNumber(row[valueCol]);
-        return date && Number.isFinite(value) ? { date, value: value as number } : null;
-      })
-      .filter(Boolean) as { date: Date; value: number }[];
-
-    if (!pairs.length) continue;
-
-    const cutoff = endOfMonth(params.targetMonth);
-    const sorted = pairs
-      .filter((pair) => pair.date <= cutoff)
-      .sort((a, b) => b.date.getTime() - a.date.getTime());
-
-    if (sorted.length) {
-      return { value: sorted[0].value, date: sorted[0].date, sourceSheet: sheetName };
-    }
-  }
-
-  return null;
-}
-
-function findHeaderRow(rows: Array<Array<unknown>>, keywords: string[]) {
-  for (let i = 0; i < Math.min(rows.length, 50); i += 1) {
-    const row = rows[i] ?? [];
-    const dateCol = row.findIndex((cell) =>
-      typeof cell === "string" ? cell.toLowerCase().includes("date") || cell.toLowerCase().includes("month") : false
-    );
-
-    if (dateCol === -1) continue;
-
-    const valueCol = row.findIndex((cell) => {
-      if (typeof cell !== "string") return false;
-      const text = cell.toLowerCase();
-      return keywords.some((keyword) => text.includes(keyword));
-    });
-
-    if (valueCol !== -1) {
-      return { headerRowIndex: i, dateCol, valueCol };
-    }
+  if (sorted.length) {
+    return { value: sorted[0].value, date: sorted[0].date, sourceSheet: "Index Values (smoothed)" };
   }
 
   return null;
