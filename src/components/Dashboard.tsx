@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 interface IndexPoint {
   date: string;
@@ -81,6 +81,7 @@ export function Dashboard() {
     queryFn: fetchIngestHistory
   });
   const [selectedSurvey, setSelectedSurvey] = useState<string | null>(null);
+  const [compositeSelection, setCompositeSelection] = useState<Record<string, boolean>>({});
   const surveyMetaMap = useMemo(() => {
     const map = new Map<string, OverviewResponse["surveyMeta"][number]>();
     data?.surveyMeta?.forEach((item) => map.set(item.survey, item));
@@ -152,6 +153,18 @@ export function Dashboard() {
     return data.rawScoreSeries.find((series) => series.name === target) ?? data.rawScoreSeries[0];
   }, [data, selectedSeries]);
 
+  const compositeSeriesList = useMemo(() => data?.zScoreSeries ?? [], [data]);
+
+  useEffect(() => {
+    if (!compositeSeriesList.length) return;
+    if (Object.keys(compositeSelection).length) return;
+    const next: Record<string, boolean> = {};
+    compositeSeriesList.forEach((series) => {
+      next[series.name] = true;
+    });
+    setCompositeSelection(next);
+  }, [compositeSeriesList, compositeSelection]);
+
   const selectedChartData = useMemo(() => {
     if (!selectedSeries && !selectedRawSeries) return [];
     const dateSet = new Set<string>();
@@ -169,14 +182,52 @@ export function Dashboard() {
     }));
   }, [selectedSeries, selectedRawSeries]);
 
-  const zScoreDomain = useMemo(
-    () => computeSeriesDomain(data?.zScoreSeries ?? []),
-    [data]
-  );
-  const rawDomain = useMemo(
-    () => computeSeriesDomain(data?.rawScoreSeries ?? []),
-    [data]
-  );
+  const compositeChartData = useMemo(() => {
+    if (!data) return [];
+    const dateSet = new Set<string>();
+    data.zScoreSeries.forEach((series) => {
+      series.points.forEach((point) => {
+        if (point.date) dateSet.add(point.date);
+      });
+    });
+    data.indexSeries.forEach((point) => {
+      if (point.date) dateSet.add(point.date);
+    });
+    const dates = Array.from(dateSet).sort(compareDateLabels);
+    return dates.map((date) => {
+      const entry: Record<string, number | null | string> = { date };
+      const indexPoint = data.indexSeries.find((point) => point.date === date);
+      entry.indexZ = indexPoint?.indexZ ?? null;
+      data.zScoreSeries.forEach((series) => {
+        entry[series.name] = series.points.find((point) => point.date === date)?.value ?? null;
+      });
+      return entry;
+    });
+  }, [data]);
+
+  const compositeColors = [
+    "#111418",
+    "#3f7d6a",
+    "#d95d39",
+    "#4f6d7a",
+    "#8e6c88",
+    "#a37c3c",
+    "#3a5a40",
+    "#8b5d33",
+    "#2f4858",
+    "#6d597a",
+    "#7a8450",
+    "#5f0f40"
+  ];
+
+  const compositeColorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    compositeSeriesList.forEach((series, idx) => {
+      map.set(series.name, compositeColors[idx % compositeColors.length]);
+    });
+    return map;
+  }, [compositeSeriesList]);
+
 
   if (isLoading) {
     return <p className="subtle">Loading dashboard...</p>;
@@ -364,14 +415,65 @@ export function Dashboard() {
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#e4dfd5" />
                 <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                <YAxis yAxisId="left" tick={{ fontSize: 12 }} domain={zScoreDomain} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 12 }} domain={rawDomain} />
-                <Tooltip />
+                <YAxis yAxisId="left" tick={{ fontSize: 12 }} domain={[-3, 3]} />
+                <Tooltip content={<SelectedSurveyTooltip />} />
                 <Line yAxisId="left" type="monotone" dataKey="zScore" stroke="#111418" strokeWidth={2} dot={false} />
-                <Line yAxisId="right" type="monotone" dataKey="rawScore" stroke="#3f7d6a" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
+        </div>
+      </section>
+
+      <section className="card p-6">
+        <h2 className="section-title">Composite Z-Score Trends</h2>
+        <p className="subtle mt-1">Overlay of survey z-scores with the index z-score.</p>
+        <div className="mt-4 flex flex-wrap gap-3 text-xs">
+          {compositeSeriesList.map((series) => (
+            <label key={series.name} className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={compositeSelection[series.name] ?? false}
+                onChange={() =>
+                  setCompositeSelection((prev) => ({
+                    ...prev,
+                    [series.name]: !(prev[series.name] ?? true)
+                  }))
+                }
+              />
+              <span style={{ color: compositeColorMap.get(series.name) ?? "#111418" }}>{series.name}</span>
+            </label>
+          ))}
+        </div>
+        <div className="mt-6 h-80">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={compositeChartData} margin={{ left: 8, right: 12 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e4dfd5" />
+              <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} domain={[-3, 3]} />
+              <Tooltip />
+              <Line
+                type="monotone"
+                dataKey="indexZ"
+                name="Index Z-Score"
+                stroke="#c52127"
+                strokeWidth={2}
+                dot={false}
+              />
+              {compositeSeriesList
+                .filter((series) => compositeSelection[series.name])
+                .map((series) => (
+                  <Line
+                    key={series.name}
+                    type="monotone"
+                    dataKey={series.name}
+                    name={series.name}
+                    stroke={compositeColorMap.get(series.name) ?? "#111418"}
+                    strokeWidth={1.5}
+                    dot={false}
+                  />
+                ))}
+            </LineChart>
+          </ResponsiveContainer>
         </div>
       </section>
     </div>
@@ -397,27 +499,28 @@ function compareDateLabels(a: string, b: string) {
   return a.localeCompare(b);
 }
 
-function computeSeriesDomain(
-  series: Array<{ points: { value: number | null }[] }>
-): [number | "auto", number | "auto"] {
-  const values: number[] = [];
-  series.forEach((entry) => {
-    entry.points.forEach((point) => {
-      if (point.value !== null && point.value !== undefined && Number.isFinite(point.value)) {
-        values.push(point.value);
-      }
-    });
-  });
-  if (!values.length) return ["auto", "auto"];
-  let min = Math.min(...values);
-  let max = Math.max(...values);
-  if (min === max) {
-    min -= 1;
-    max += 1;
-  } else {
-    const pad = (max - min) * 0.08;
-    min -= pad;
-    max += pad;
-  }
-  return [min, max];
+function formatNumber(value: number | null | undefined) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  const rounded = Math.round(value * 100) / 100;
+  return rounded.toLocaleString();
+}
+
+function SelectedSurveyTooltip({
+  active,
+  payload,
+  label
+}: {
+  active?: boolean;
+  payload?: Array<{ payload?: { zScore?: number | null; rawScore?: number | null } }>;
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  const data = payload[0]?.payload ?? {};
+  return (
+    <div className="rounded-xl border border-sand-200 bg-white px-3 py-2 text-xs text-ink-900 shadow-sm">
+      <p className="font-semibold">{label}</p>
+      <p className="mt-1">Z-score: {formatNumber(data.zScore)}</p>
+      <p>Raw score: {formatNumber(data.rawScore)}</p>
+    </div>
+  );
 }

@@ -387,8 +387,8 @@ export function Automation() {
             <p className="subtle">Provide three context inputs for Claude to weave into the analysis.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button className="button-secondary" onClick={() => runIngest.mutate()}>
-              Run scrape now
+            <button className="button-secondary" onClick={() => runIngest.mutate()} disabled={runIngest.isPending}>
+              {runIngest.isPending ? "Running scrape..." : "Run scrape now"}
             </button>
           </div>
         </div>
@@ -401,8 +401,12 @@ export function Automation() {
           <button className="button-secondary" onClick={() => saveContext.mutate()} disabled={!contextComplete}>
             Save context
           </button>
-          <button className="button-primary" onClick={() => generateDraft.mutate()} disabled={!contextComplete}>
-            Generate draft
+          <button
+            className="button-primary"
+            onClick={() => generateDraft.mutate()}
+            disabled={!contextComplete || generateDraft.isPending}
+          >
+            {generateDraft.isPending ? "Generating draft..." : "Generate draft"}
           </button>
         </div>
         {actionError ? <p className="text-sm text-ember-600">{actionError}</p> : null}

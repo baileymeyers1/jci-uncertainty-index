@@ -9,7 +9,7 @@ interface ClaudeMessage {
 
 export async function callClaude(prompt: string): Promise<string> {
   const env = getEnv();
-  const model = env.CLAUDE_MODEL?.trim() || "claude-sonnet-4-20250514";
+  const model = env.CLAUDE_MODEL?.trim() || "claude-opus-4-5";
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {

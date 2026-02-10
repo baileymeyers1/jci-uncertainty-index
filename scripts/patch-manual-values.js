@@ -247,31 +247,6 @@ async function patchMonthlyRow(sheets, sheetName, dateLabel, data) {
   }
 }
 
-async function ensureZScoreRow(sheets, dateLabel) {
-  const values = await getSheetValues(sheets, "zscores");
-  const headers = values[0] || [];
-  if (!headers.length) return;
-  const dateIdx = headers.findIndex((header) => normalizeHeader(header) === "DATE");
-  const rowIndex = findRowByDate(values, dateLabel);
-  if (rowIndex !== -1) return;
-
-  const dateCol = dateIdx === -1 ? 0 : dateIdx;
-  const row = new Array(headers.length).fill("");
-  row[dateCol] = dateLabel;
-  await appendRowRange(sheets, "zscores", headers.length - 1, row);
-
-  const newRowIndex = values.length;
-  const formulaStart = dateCol + 1;
-  const formulaEnd = headers.length - 1;
-  if (formulaStart <= formulaEnd && newRowIndex > 1) {
-    try {
-      await copyFormulaRange(sheets, "zscores", newRowIndex - 1, newRowIndex, formulaStart, formulaEnd);
-    } catch (error) {
-      console.error("Z-score formula copy failed", error);
-    }
-  }
-}
-
 async function syncZScoreDatesFromData(sheets) {
   const dataValues = await getSheetValues(sheets, "Data");
   const zValues = await getSheetValues(sheets, "zscores");
@@ -286,27 +261,16 @@ async function syncZScoreDatesFromData(sheets) {
   if (dataDateIdx === -1) return;
 
   const zDateCol = zDateIdx === -1 ? 0 : zDateIdx;
-  const existing = new Set(
-    zValues
-      .slice(1)
-      .map((row) => (row[zDateCol] ?? "").toString().trim())
-      .filter(Boolean)
-  );
+  const dataRows = dataValues.slice(1);
+  const desiredDates = dataRows.map((row) => row[dataDateIdx] ?? "");
+  const neededRows = desiredDates.length;
 
-  let added = 0;
-  let zRowCount = zValues.length;
-
-  for (const row of dataValues.slice(1)) {
-    const label = row[dataDateIdx];
-    if (!label) continue;
-    const key = label.toString().trim();
-    if (!key || existing.has(key)) continue;
-
+  let currentRows = zValues.length - 1;
+  while (currentRows < neededRows) {
     const newRow = new Array(zHeaders.length).fill("");
-    newRow[zDateCol] = label;
     await appendRowRange(sheets, "zscores", zHeaders.length - 1, newRow);
-    const newRowIndex = zRowCount;
-    zRowCount += 1;
+    const newRowIndex = currentRows + 1;
+    currentRows += 1;
 
     const formulaStart = zDateCol + 1;
     const formulaEnd = zHeaders.length - 1;
@@ -317,14 +281,17 @@ async function syncZScoreDatesFromData(sheets) {
         console.error("Z-score formula copy failed", error);
       }
     }
-
-    existing.add(key);
-    added += 1;
   }
 
-  if (added > 0) {
-    const updated = await getSheetValues(sheets, "zscores");
-    await sortSheetByDate(sheets, "zscores", updated);
+  if (neededRows > 0) {
+    const colLetter = columnIndexToLetter(zDateCol);
+    const endRow = neededRows + 1;
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: `zscores!${colLetter}2:${colLetter}${endRow}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: desiredDates.map((date) => [date]) }
+    });
   }
 }
 
@@ -332,7 +299,6 @@ async function run() {
   const sheets = google.sheets({ version: "v4", auth: getAuth() });
   for (const [month, values] of Object.entries(updates)) {
     await patchMonthlyRow(sheets, "Data", month, values);
-    await ensureZScoreRow(sheets, month);
   }
   await syncZScoreDatesFromData(sheets);
   const updated = await getSheetValues(sheets, "Data");
