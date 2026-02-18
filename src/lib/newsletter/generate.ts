@@ -107,8 +107,8 @@ export async function generateNewsletterHTML(params: {
     : params.monthLabel;
   const env = getEnv();
   const baseUrl = (env.NEWSLETTER_ASSET_BASE_URL ?? env.NEXTAUTH_URL).replace(/\/$/, "");
-  const trendChartUrl = buildChartUrl(baseUrl, "trend", params.monthLabel);
-  const sparklineChartUrl = buildChartUrl(baseUrl, "sparkline", params.monthLabel);
+  const trendChartUrl = buildChartUrl(baseUrl, "trend", params.monthLabel, "png");
+  const sparklineChartUrl = buildChartUrl(baseUrl, "sparkline", params.monthLabel, "png");
   const percentile =
     latest.percentile !== null && latest.percentile !== undefined
       ? latest.percentile <= 1
@@ -357,8 +357,8 @@ function buildHeaderBlock(monthLabel: string, dataThrough: string) {
 
 function wrapEmailHtml(bodyHtml: string, headerBlock: string) {
   return `
-<div style="background:#f7f2ed;padding:24px 0;">
-  <table role="presentation" align="center" width="100%" style="max-width:680px;margin:0 auto;border-collapse:collapse;background:#ffffff;border:1px solid #f1e4db;">
+<div style="background:#f7f2ed;padding:24px 0;font-family:Georgia, 'Times New Roman', serif;">
+  <table role="presentation" align="center" width="100%" style="max-width:680px;margin:0 auto;border-collapse:collapse;background:#ffffff;border:1px solid #f1e4db;font-family:Georgia, 'Times New Roman', serif;">
     <tr>
       <td style="padding:0;">
         ${headerBlock}
@@ -416,23 +416,23 @@ function buildMetricsBlock(params: {
   const mom = formatSigned(params.momChange);
   const momLabel = params.prevLabel ? `MoM Change` : "MoM Change";
   return `
-<table role="presentation" width="100%" style="border-collapse:collapse;margin:16px 0 6px 0;">
+<table role="presentation" width="100%" style="border-collapse:collapse;margin:16px 0 6px 0;font-family:Georgia, 'Times New Roman', serif;">
   <tr>
     <td style="width:25%;padding:12px 10px;background:#fff7f5;">
       <div style="font-size:32px;font-weight:700;color:#c52127;font-family:Georgia, 'Times New Roman', serif;">${indexScore}</div>
-      <div style="font-size:12px;color:#7a1d22;letter-spacing:0.08em;text-transform:uppercase;font-family:Arial, sans-serif;">Index Score</div>
+      <div style="font-size:12px;color:#7a1d22;letter-spacing:0.08em;text-transform:uppercase;font-family:Georgia, 'Times New Roman', serif;">Index Score</div>
     </td>
     <td style="width:25%;padding:12px 10px;background:#fff7f5;">
       <div style="font-size:26px;font-weight:700;color:#1f2933;font-family:Georgia, 'Times New Roman', serif;">${percentile}</div>
-      <div style="font-size:12px;color:#7a1d22;letter-spacing:0.08em;text-transform:uppercase;font-family:Arial, sans-serif;">Percentile</div>
+      <div style="font-size:12px;color:#7a1d22;letter-spacing:0.08em;text-transform:uppercase;font-family:Georgia, 'Times New Roman', serif;">Percentile</div>
     </td>
     <td style="width:25%;padding:12px 10px;background:#fff7f5;">
       <div style="font-size:26px;font-weight:700;color:#1f2933;font-family:Georgia, 'Times New Roman', serif;">${zScore}</div>
-      <div style="font-size:12px;color:#7a1d22;letter-spacing:0.08em;text-transform:uppercase;font-family:Arial, sans-serif;">Z-Score</div>
+      <div style="font-size:12px;color:#7a1d22;letter-spacing:0.08em;text-transform:uppercase;font-family:Georgia, 'Times New Roman', serif;">Z-Score</div>
     </td>
     <td style="width:25%;padding:12px 10px;background:#fff7f5;">
       <div style="font-size:26px;font-weight:700;color:#2f7a3e;font-family:Georgia, 'Times New Roman', serif;">${mom}</div>
-      <div style="font-size:12px;color:#7a1d22;letter-spacing:0.08em;text-transform:uppercase;font-family:Arial, sans-serif;">${momLabel}</div>
+      <div style="font-size:12px;color:#7a1d22;letter-spacing:0.08em;text-transform:uppercase;font-family:Georgia, 'Times New Roman', serif;">${momLabel}</div>
     </td>
   </tr>
 </table>`;
@@ -487,10 +487,11 @@ function buildIndexSummarySection(params: {
   return `${heading}${params.metricsBlock}${sparklineBlock}${params.summaryBody}`;
 }
 
-function buildChartUrl(baseUrl: string, type: "trend" | "sparkline", monthLabel: string) {
+function buildChartUrl(baseUrl: string, type: "trend" | "sparkline", monthLabel: string, format: "svg" | "png") {
   const search = new URLSearchParams({
     type,
-    month: monthLabel
+    month: monthLabel,
+    format
   });
   return `${baseUrl}/api/newsletter/charts?${search.toString()}`;
 }

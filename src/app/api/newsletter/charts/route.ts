@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getOverviewData } from "@/lib/sheets";
 import { buildSparklineChartSvg, buildTrendChartSvg } from "@/lib/newsletter/charts";
+import { Resvg } from "@resvg/resvg-js";
 import { parse, isValid } from "date-fns";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,7 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const type = searchParams.get("type");
   const monthLabel = searchParams.get("month");
+  const format = searchParams.get("format") ?? "svg";
   if (!type || (type !== "trend" && type !== "sparkline")) {
     return NextResponse.json({ error: "Invalid chart type" }, { status: 400 });
   }
@@ -51,6 +53,17 @@ export async function GET(req: Request) {
   }
 
   const svg = type === "trend" ? buildTrendChartSvg(values, labels) : buildSparklineChartSvg(values, labels);
+
+  if (format === "png") {
+    const resvg = new Resvg(svg);
+    const pngData = resvg.render().asPng();
+    return new NextResponse(pngData, {
+      headers: {
+        "Content-Type": "image/png",
+        "Cache-Control": "public, max-age=3600"
+      }
+    });
+  }
 
   return new NextResponse(svg, {
     headers: {
