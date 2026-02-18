@@ -56,7 +56,7 @@ export async function GET(req: Request) {
 
   if (format === "png") {
     const { Resvg } = await import("@resvg/resvg-js");
-    const resvg = new Resvg(svg);
+    const resvg = new Resvg(svg, { font: { loadSystemFonts: true } });
     const pngData = resvg.render().asPng();
     const pngBuffer = new Uint8Array(pngData);
     return new NextResponse(pngBuffer, {

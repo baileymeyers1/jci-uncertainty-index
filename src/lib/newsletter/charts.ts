@@ -19,12 +19,12 @@ type Point = { x: number; y: number };
 const defaultOptions: ChartOptions = {
   width: 560,
   height: 220,
-  padding: { top: 16, right: 18, bottom: 36, left: 46 },
+  padding: { top: 16, right: 18, bottom: 40, left: 58 },
   background: "#fff7f5",
   lineColor: "#c52127",
-  axisColor: "#d7c3bb",
-  labelColor: "#7a1d22",
-  fontFamily: "Georgia, 'Times New Roman', serif",
+  axisColor: "#cdb7af",
+  labelColor: "#5c1116",
+  fontFamily: "serif",
   tickCount: 4,
   xTickCount: 3,
   label: "Index score"
@@ -78,13 +78,13 @@ function buildLineChartSvg(values: number[], labels: string[], options?: Partial
   return `
 <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escapeText(opts.label)} chart">
   <rect width="${width}" height="${height}" fill="${background}" />
-  <line x1="${padding.left}" y1="${padding.top}" x2="${padding.left}" y2="${height - padding.bottom}" stroke="${axisColor}" stroke-width="1" />
-  <line x1="${padding.left}" y1="${height - padding.bottom}" x2="${width - padding.right}" y2="${height - padding.bottom}" stroke="${axisColor}" stroke-width="1" />
+  <line x1="${padding.left}" y1="${padding.top}" x2="${padding.left}" y2="${height - padding.bottom}" stroke="${axisColor}" stroke-width="1.2" />
+  <line x1="${padding.left}" y1="${height - padding.bottom}" x2="${width - padding.right}" y2="${height - padding.bottom}" stroke="${axisColor}" stroke-width="1.2" />
   ${yTicks
     .map(
       (tick) => `
   <line x1="${padding.left - 4}" y1="${tick.y}" x2="${padding.left}" y2="${tick.y}" stroke="${axisColor}" stroke-width="1" />
-  <text x="${padding.left - 8}" y="${tick.y + 4}" font-size="11" text-anchor="end" fill="${labelColor}" font-family="${fontFamily}">
+  <text x="${Math.max(8, padding.left - 8)}" y="${tick.y + 4}" font-size="12" font-weight="600" text-anchor="end" fill="${labelColor}" font-family="${fontFamily}">
     ${tick.value.toFixed(1)}
   </text>`
     )
@@ -93,7 +93,7 @@ function buildLineChartSvg(values: number[], labels: string[], options?: Partial
     .map(
       (tick) => `
   <line x1="${tick.x}" y1="${height - padding.bottom}" x2="${tick.x}" y2="${height - padding.bottom + 4}" stroke="${axisColor}" stroke-width="1" />
-  <text x="${tick.x}" y="${height - padding.bottom + 18}" font-size="11" text-anchor="middle" fill="${labelColor}" font-family="${fontFamily}">
+  <text x="${tick.x}" y="${height - padding.bottom + 20}" font-size="12" font-weight="600" text-anchor="middle" fill="${labelColor}" font-family="${fontFamily}">
     ${escapeText(tick.label)}
   </text>`
     )
@@ -110,7 +110,7 @@ export function buildSparklineChartSvg(values: number[], labels: string[]) {
   return buildLineChartSvg(values, labels, {
     width: 420,
     height: 140,
-    padding: { top: 12, right: 16, bottom: 28, left: 40 },
+    padding: { top: 12, right: 16, bottom: 32, left: 50 },
     tickCount: 3,
     xTickCount: 3,
     label: "3-month trend"
