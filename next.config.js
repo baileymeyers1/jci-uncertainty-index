@@ -1,11 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  serverExternalPackages: ["@resvg/resvg-js"],
   experimental: {
     serverActions: {
       allowedOrigins: []
-    }
+    },
+    serverComponentsExternalPackages: ["@resvg/resvg-js"]
   }
 };
 
