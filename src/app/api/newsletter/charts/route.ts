@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { getOverviewData } from "@/lib/sheets";
 import { buildSparklineChartSvg, buildTrendChartSvg } from "@/lib/newsletter/charts";
-import { Resvg } from "@resvg/resvg-js";
 import { parse, isValid } from "date-fns";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 function parseMonthLabel(label: string | null) {
   if (!label) return null;
@@ -55,6 +55,7 @@ export async function GET(req: Request) {
   const svg = type === "trend" ? buildTrendChartSvg(values, labels) : buildSparklineChartSvg(values, labels);
 
   if (format === "png") {
+    const { Resvg } = await import("@resvg/resvg-js");
     const resvg = new Resvg(svg);
     const pngData = resvg.render().asPng();
     return new NextResponse(pngData, {
