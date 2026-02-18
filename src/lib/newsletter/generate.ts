@@ -292,6 +292,7 @@ function normalizeNewsletterHtml(
   let html = sanitizeClaudeHtml(rawHtml);
   html = stripExistingHeaderAssets(html);
   html = stripChartMentions(html);
+  html = stripFontFamilies(html);
 
   const headerBlock = buildHeaderBlock(params.monthLabel, params.dataThrough);
   const indexTrendImage = buildChartImageFromUrl(
@@ -316,7 +317,7 @@ function normalizeNewsletterHtml(
   });
 
   const { indexSummaryBody, restHtml } = extractIndexSummary(html);
-  const cleanedSummaryBody = sanitizeIndexSummaryBody(indexSummaryBody);
+  const cleanedSummaryBody = stripFontFamilies(sanitizeIndexSummaryBody(indexSummaryBody));
   const summarySection = buildIndexSummarySection({
     metricsBlock,
     sparklineImage,
@@ -474,6 +475,15 @@ function sanitizeIndexSummaryBody(html: string) {
   output = output.replace(/Index score trend[\s\S]*?<\/p>/gi, "");
   output = output.replace(/3-month trend sparkline[\s\S]*?<\/p>/gi, "");
   return output.trim();
+}
+
+function stripFontFamilies(html: string) {
+  if (!html) return html;
+  let output = html;
+  output = output.replace(/font-family\s*:\s*[^;"']+;?/gi, "");
+  output = output.replace(/font-family\s*=\s*\"[^\"]*\"/gi, "");
+  output = output.replace(/font-family\s*=\s*\'[^\']*\'/gi, "");
+  return output;
 }
 
 function buildIndexSummarySection(params: {

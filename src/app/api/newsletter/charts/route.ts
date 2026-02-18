@@ -58,7 +58,8 @@ export async function GET(req: Request) {
     const { Resvg } = await import("@resvg/resvg-js");
     const resvg = new Resvg(svg);
     const pngData = resvg.render().asPng();
-    return new NextResponse(pngData, {
+    const pngBuffer = new Uint8Array(pngData);
+    return new NextResponse(pngBuffer, {
       headers: {
         "Content-Type": "image/png",
         "Cache-Control": "public, max-age=3600"
