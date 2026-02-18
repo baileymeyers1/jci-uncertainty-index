@@ -1,5 +1,5 @@
 import { AdapterResult, SurveyAdapter } from "./types";
-import { fredLatestValue, fredLatestValueBefore, fredMonthlyAverage } from "./fred";
+import { fredLatestValueBefore, fredMonthlyAverage } from "./fred";
 import { getSbuSeriesValue } from "./atlantaFed";
 import { getLatestCfoValue } from "./cfoSurvey";
 import { getNyFedInflationMedian } from "./nyFedSce";
@@ -175,8 +175,9 @@ export const surveyAdapters: SurveyAdapter[] = [
     frequency: "monthly",
     sourceUrl: "https://fred.stlouisfed.org/series/USACSCICP02STSAM",
     releaseCadence: "Monthly",
-    fetchValue: async () => {
-      const result = await fredLatestValue("USACSCICP02STSAM");
+    fetchValue: async (targetMonth) => {
+      const cutoff = new Date(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 0);
+      const result = await fredLatestValueBefore("USACSCICP02STSAM", cutoff);
       if (!result) return { value: null, status: "missing" };
       return { value: result.value, valueDate: result.date, status: "success" };
     }

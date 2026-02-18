@@ -12,6 +12,7 @@ export async function GET() {
   const contexts = await prisma.contextEntry.findMany({ orderBy: { createdAt: "desc" } });
   const recipients = await prisma.recipient.findMany({ orderBy: { createdAt: "desc" } });
   const ingestRuns = await prisma.ingestRun.findMany({ orderBy: { startedAt: "desc" }, take: 10 });
+  const sendLogs = await prisma.sendLog.findMany({ orderBy: { createdAt: "desc" }, take: 12 });
 
-  return NextResponse.json({ drafts, contexts, recipients, ingestRuns });
+  return NextResponse.json({ drafts, contexts, recipients, ingestRuns, sendLogs });
 }

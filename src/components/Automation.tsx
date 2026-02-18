@@ -30,6 +30,18 @@ interface HistoryResponse {
   }[];
   recipients: { id: string; email: string; name: string | null }[];
   ingestRuns: { id: string; month: string; status: string; startedAt: string; message?: string | null }[];
+  sendLogs: {
+    id: string;
+    month: string;
+    mode: string;
+    status: string;
+    recipientCount: number | null;
+    recipientEmail: string | null;
+    brevoId: string | null;
+    scheduledAt?: string | null;
+    createdAt: string;
+    message?: string | null;
+  }[];
 }
 
 interface IngestSourceValue {
@@ -87,6 +99,7 @@ export function Automation() {
   const [context3, setContext3] = useState("");
   const [selectedDraft, setSelectedDraft] = useState<Draft | null>(null);
   const [draftHtml, setDraftHtml] = useState("");
+  const [editorMode, setEditorMode] = useState<"edit" | "preview">("edit");
   const [recipientEmail, setRecipientEmail] = useState("");
   const [recipientName, setRecipientName] = useState("");
   const [sendDraftId, setSendDraftId] = useState("");
@@ -219,7 +232,31 @@ export function Automation() {
       if (!res.ok) throw new Error("Failed to queue send");
       return res.json();
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["history"] })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["history"] }),
+    onError: (err) => setActionError(err instanceof Error ? err.message : "Failed to queue send")
+  });
+
+  const cancelQueue = useMutation({
+    mutationFn: async (draftId: string) => {
+      const res = await fetch("/api/newsletter/queue", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ draftId })
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || "Failed to cancel queued send");
+      }
+      return res.json() as Promise<{ warning?: string | null }>;
+    },
+    onSuccess: (data) => {
+      setActionSuccess("Queued send cancelled.");
+      if (data?.warning) {
+        setActionError(data.warning);
+      }
+      queryClient.invalidateQueries({ queryKey: ["history"] });
+    },
+    onError: (err) => setActionError(err instanceof Error ? err.message : "Failed to cancel queued send")
   });
 
   const deleteDraft = useMutation({
@@ -315,7 +352,7 @@ export function Automation() {
     onSuccess: (data) => {
       setSendSuccess(
         sendMode === "all"
-          ? "Draft queued to send to the full list."
+          ? "Draft sent to the full list."
           : `Draft sent to ${data.sent ?? "recipients"}.`
       );
     },
@@ -375,6 +412,8 @@ export function Automation() {
     return <p className="subtle">Loading automation workspace...</p>;
   }
 
+  const previewHtml = buildPreviewHtml(draftHtml);
+
   return (
     <div className="space-y-10">
       <section className="card p-6 space-y-4">
@@ -433,11 +472,44 @@ export function Automation() {
           </div>
         </div>
         <div className="card p-6">
-          <h2 className="section-title">Draft Editor</h2>
-          <p className="subtle mt-1">Edit the HTML content before scheduling a send.</p>
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="section-title">Draft Editor</h2>
+              <p className="subtle mt-1">Edit the HTML content before scheduling a send.</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                className={editorMode === "edit" ? "button-primary" : "button-secondary"}
+                onClick={() => setEditorMode("edit")}
+              >
+                Edit
+              </button>
+              <button
+                className={editorMode === "preview" ? "button-primary" : "button-secondary"}
+                onClick={() => setEditorMode("preview")}
+              >
+                Preview
+              </button>
+            </div>
+          </div>
           {selectedDraft ? (
             <div className="mt-4 space-y-4">
-              <ReactQuill theme="snow" value={draftHtml} onChange={setDraftHtml} />
+              {editorMode === "edit" ? (
+                <ReactQuill theme="snow" value={draftHtml} onChange={setDraftHtml} />
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-ink-600">
+                    Preview reflects the HTML email layout. Rendering may vary slightly by email client.
+                  </p>
+                  <div className="email-preview">
+                    <iframe
+                      className="email-preview-frame"
+                      title="Email preview"
+                      srcDoc={previewHtml}
+                    />
+                  </div>
+                </div>
+              )}
               <div className="flex flex-wrap gap-3">
                 <button className="button-secondary" onClick={() => saveDraft.mutate()}>Save edits</button>
                 <button
@@ -447,6 +519,15 @@ export function Automation() {
                 >
                   {queueSend.isPending ? "Queueing..." : "Queue send"}
                 </button>
+                {selectedDraft.status === "QUEUED" ? (
+                  <button
+                    className="button-secondary"
+                    onClick={() => cancelQueue.mutate(selectedDraft.id)}
+                    disabled={cancelQueue.isPending}
+                  >
+                    {cancelQueue.isPending ? "Cancelling..." : "Cancel queued send"}
+                  </button>
+                ) : null}
                 <button
                   className="button-secondary"
                   onClick={() => {
@@ -471,7 +552,7 @@ export function Automation() {
         </div>
       </section>
 
-      <section className="grid gap-6 md:grid-cols-2">
+      <section className="grid gap-6 lg:grid-cols-3">
         <div className="card p-6">
           <h2 className="section-title">Recipients</h2>
           <p className="subtle mt-1">Manage the single list and sync to Brevo.</p>
@@ -578,6 +659,46 @@ export function Automation() {
               </li>
             ))}
           </ul>
+        </div>
+        <div className="card p-6">
+          <h2 className="section-title">Sent Emails</h2>
+          <p className="subtle mt-1">Recent send and queue activity.</p>
+          {data.sendLogs.length ? (
+            <ul className="mt-4 space-y-3 text-sm">
+              {data.sendLogs.map((log) => {
+                const statusTone =
+                  log.status === "SENT" || log.status === "QUEUED" ? "text-moss-600" : "text-ember-600";
+                const recipients =
+                  log.recipientCount !== null && log.recipientCount !== undefined
+                    ? `${log.recipientCount} recipients`
+                    : log.recipientEmail
+                      ? log.recipientEmail
+                      : "Recipients n/a";
+                const detail =
+                  log.status === "QUEUED" && log.scheduledAt
+                    ? `Scheduled ${new Date(log.scheduledAt).toLocaleString()}`
+                    : log.status === "CANCELLED"
+                      ? `Cancelled ${new Date(log.createdAt).toLocaleString()}`
+                      : log.status === "FAILED"
+                        ? `Failed ${new Date(log.createdAt).toLocaleString()}`
+                        : `Sent ${new Date(log.createdAt).toLocaleString()}`;
+                return (
+                  <li key={log.id} className="border-b border-sand-200 pb-2">
+                    <div className="flex items-center justify-between">
+                      <span>{log.month}</span>
+                      <span className={statusTone}>{log.status}</span>
+                    </div>
+                    <p className="subtle text-xs mt-1">
+                      {log.mode} · {recipients}
+                    </p>
+                    <p className="subtle text-xs">{detail}</p>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="subtle mt-4 text-sm">No send activity yet.</p>
+          )}
         </div>
       </section>
 
@@ -703,6 +824,26 @@ export function Automation() {
       ) : null}
     </div>
   );
+}
+
+function buildPreviewHtml(html: string) {
+  if (!html) return "";
+  const hasHtmlTag = /<html[\s>]/i.test(html);
+  if (hasHtmlTag) return html;
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body { margin: 0; padding: 24px; background: #f7f2ed; }
+      table { border-collapse: collapse; }
+    </style>
+  </head>
+  <body>
+    ${html}
+  </body>
+</html>`;
 }
 
 function WeightRow({

@@ -47,3 +47,14 @@ p, li, a, button, input, textarea, label {
 .textarea {
   @apply w-full rounded-xl border border-sand-200 bg-white px-3 py-2 text-sm min-h-[120px] focus:outline-none focus:ring-2 focus:ring-ember-500/40;
 }
+
+.email-preview {
+  @apply rounded-2xl border border-sand-200 bg-white px-6 py-6 shadow-subtle overflow-auto max-h-[520px];
+}
+
+.email-preview-frame {
+  width: 100%;
+  min-height: 520px;
+  border: 0;
+  background: transparent;
+}

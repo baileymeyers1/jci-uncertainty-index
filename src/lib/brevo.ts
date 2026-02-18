@@ -40,7 +40,7 @@ export async function createCampaign(params: {
   name: string;
   subject: string;
   html: string;
-  scheduledAt: string;
+  scheduledAt?: string;
 }) {
   const env = getEnv();
   const res = await brevoClient().post("/emailCampaigns", {
@@ -54,6 +54,14 @@ export async function createCampaign(params: {
   });
 
   return res.data;
+}
+
+export async function sendCampaignNow(campaignId: string) {
+  await brevoClient().post(`/emailCampaigns/${campaignId}/sendNow`);
+}
+
+export async function deleteCampaign(campaignId: string) {
+  await brevoClient().delete(`/emailCampaigns/${campaignId}`);
 }
 
 export async function sendTransactionalEmail(params: {

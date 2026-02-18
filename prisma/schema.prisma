@@ -106,6 +106,7 @@ model Draft {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   sendSchedule SendSchedule?
+  sendLogs     SendLog[]
 }
 
 model SendSchedule {
@@ -117,6 +118,21 @@ model SendSchedule {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   draft       Draft    @relation(fields: [draftId], references: [id])
+}
+
+model SendLog {
+  id             String   @id @default(cuid())
+  draftId        String?
+  month          String
+  mode           String
+  status         String
+  recipientCount Int?
+  recipientEmail String?
+  brevoId        String?
+  scheduledAt    DateTime?
+  message        String?
+  createdAt      DateTime @default(now())
+  draft          Draft?   @relation(fields: [draftId], references: [id], onDelete: SetNull)
 }
 
 model IngestRun {

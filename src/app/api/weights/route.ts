@@ -44,11 +44,14 @@ export async function GET() {
     const meta = matchMeta(key);
     const latestValueRaw = latestRow[key];
     const latestValue = latestValueRaw !== undefined && latestValueRaw !== "" ? Number(latestValueRaw) : null;
+    const isEpu = key.toLowerCase().includes("economic policy uncertainty index");
+    const fallbackMean = isEpu ? 116.7817 : null;
+    const fallbackStdev = isEpu ? 71.0487 : null;
     return {
       survey: adapter.sheetHeader,
       weight: meta?.weight ?? null,
-      mean: meta?.mean ?? null,
-      stdev: meta?.stdev ?? null,
+      mean: meta?.mean ?? fallbackMean,
+      stdev: meta?.stdev ?? fallbackStdev,
       frequency: adapter.frequency,
       sourceUrl: adapter.sourceUrl,
       latestValue: Number.isFinite(latestValue) ? latestValue : null,
