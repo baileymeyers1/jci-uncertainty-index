@@ -24,7 +24,7 @@ const defaultOptions: ChartOptions = {
   lineColor: "#c52127",
   axisColor: "#cdb7af",
   labelColor: "#5c1116",
-  fontFamily: "serif",
+  fontFamily: "EB Garamond, serif",
   tickCount: 4,
   xTickCount: 3,
   label: "Index score"

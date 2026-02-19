@@ -2,9 +2,28 @@ import { NextResponse } from "next/server";
 import { getOverviewData } from "@/lib/sheets";
 import { buildSparklineChartSvg, buildTrendChartSvg } from "@/lib/newsletter/charts";
 import { parse, isValid } from "date-fns";
+import path from "path";
+import { promises as fs } from "fs";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+let cachedFontBuffer: Uint8Array | null = null;
+
+async function loadFontBuffer() {
+  if (cachedFontBuffer) return cachedFontBuffer;
+  const fontPath = path.join(
+    process.cwd(),
+    "node_modules",
+    "@fontsource",
+    "eb-garamond",
+    "files",
+    "eb-garamond-latin-400-normal.woff2"
+  );
+  const data = await fs.readFile(fontPath);
+  cachedFontBuffer = new Uint8Array(data);
+  return cachedFontBuffer;
+}
 
 function parseMonthLabel(label: string | null) {
   if (!label) return null;
@@ -56,7 +75,14 @@ export async function GET(req: Request) {
 
   if (format === "png") {
     const { Resvg } = await import("@resvg/resvg-js");
-    const resvg = new Resvg(svg, { font: { loadSystemFonts: true } });
+    const fontBuffer = await loadFontBuffer();
+    const resvg = new Resvg(svg, {
+      font: {
+        fontBuffers: [fontBuffer],
+        loadSystemFonts: false,
+        defaultFontFamily: "EB Garamond"
+      }
+    });
     const pngData = resvg.render().asPng();
     const pngBuffer = new Uint8Array(pngData);
     return new NextResponse(pngBuffer, {
