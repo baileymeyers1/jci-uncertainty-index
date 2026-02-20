@@ -43,7 +43,7 @@ function formatShortLabel(label: string) {
 function buildLineChartSvg(values: number[], labels: string[], options?: Partial<ChartOptions>) {
   const opts: ChartOptions = { ...defaultOptions, ...options };
   const { width, height, padding, background, lineColor, axisColor, labelColor, tickCount, xTickCount } = opts;
-  const fontFamily = "EB Garamond, Georgia, 'Times New Roman', serif";
+  const fontFamily = "Georgia, 'Times New Roman', serif";
   const yLabelSize = 12;
   const xLabelSize = 11;
 
