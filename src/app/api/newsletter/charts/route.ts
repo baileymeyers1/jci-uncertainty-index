@@ -2,19 +2,9 @@ import { NextResponse } from "next/server";
 import { getOverviewData } from "@/lib/sheets";
 import { buildSparklineChartSvg, buildTrendChartSvg } from "@/lib/newsletter/charts";
 import { parse, isValid } from "date-fns";
-import path from "path";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-const fontPath = path.join(
-  process.cwd(),
-  "node_modules",
-  "@fontsource",
-  "eb-garamond",
-  "files",
-  "eb-garamond-latin-400-normal.woff2"
-);
 
 function parseMonthLabel(label: string | null) {
   if (!label) return null;
@@ -68,9 +58,8 @@ export async function GET(req: Request) {
     const { Resvg } = await import("@resvg/resvg-js");
     const resvg = new Resvg(svg, {
       font: {
-        fontFiles: [fontPath],
-        loadSystemFonts: false,
-        defaultFontFamily: "EB Garamond"
+        loadSystemFonts: true,
+        defaultFontFamily: "serif"
       }
     });
     const pngData = resvg.render().asPng();
