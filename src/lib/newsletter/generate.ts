@@ -107,8 +107,9 @@ export async function generateNewsletterHTML(params: {
     : params.monthLabel;
   const env = getEnv();
   const baseUrl = (env.NEWSLETTER_ASSET_BASE_URL ?? env.NEXTAUTH_URL).replace(/\/$/, "");
-  const trendChartUrl = buildChartUrl(baseUrl, "trend", params.monthLabel, "png");
-  const sparklineChartUrl = buildChartUrl(baseUrl, "sparkline", params.monthLabel, "png");
+  const chartCacheKey = Date.now().toString();
+  const trendChartUrl = buildChartUrl(baseUrl, "trend", params.monthLabel, "png", chartCacheKey);
+  const sparklineChartUrl = buildChartUrl(baseUrl, "sparkline", params.monthLabel, "png", chartCacheKey);
   const percentile =
     latest.percentile !== null && latest.percentile !== undefined
       ? latest.percentile <= 1
@@ -497,12 +498,21 @@ function buildIndexSummarySection(params: {
   return `${heading}${params.metricsBlock}${sparklineBlock}${params.summaryBody}`;
 }
 
-function buildChartUrl(baseUrl: string, type: "trend" | "sparkline", monthLabel: string, format: "svg" | "png") {
+function buildChartUrl(
+  baseUrl: string,
+  type: "trend" | "sparkline",
+  monthLabel: string,
+  format: "svg" | "png",
+  cacheKey?: string
+) {
   const search = new URLSearchParams({
     type,
     month: monthLabel,
     format
   });
+  if (cacheKey) {
+    search.set("ts", cacheKey);
+  }
   const version =
     process.env.NEWSLETTER_CHART_VERSION ??
     process.env.VERCEL_GIT_COMMIT_SHA ??
