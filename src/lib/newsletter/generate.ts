@@ -503,6 +503,14 @@ function buildChartUrl(baseUrl: string, type: "trend" | "sparkline", monthLabel:
     month: monthLabel,
     format
   });
+  const version =
+    process.env.NEWSLETTER_CHART_VERSION ??
+    process.env.VERCEL_GIT_COMMIT_SHA ??
+    process.env.VERCEL_GITHUB_COMMIT_SHA ??
+    process.env.VERCEL_DEPLOYMENT_ID;
+  if (version) {
+    search.set("v", version.slice(0, 12));
+  }
   return `${baseUrl}/api/newsletter/charts?${search.toString()}`;
 }
 
