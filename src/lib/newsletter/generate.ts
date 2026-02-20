@@ -215,7 +215,9 @@ Requirements:
 - Use the sources provided above as primary citations; do not invent sources.
 - Avoid linking the phrase "JCI Uncertainty Index" (including in the title or index summary).
 - Use a mix of reputable news outlets (e.g., AP, Reuters, NYT, WSJ, BBC, Washington Post, The Hill, Al Jazeera) in every section where applicable.
-- Avoid over-referencing any single outlet; diversify citations and avoid repeating one outlet more than twice in a section.
+- Avoid over-referencing any single outlet; diversify citations and avoid repeating one outlet more than once in a section.
+- Use each source URL at most once across the full email, and aim for at least 20 distinct sources overall.
+- Link anchors must be short (2-6 words), never full sentences or multiple clauses.
 - Maintain a policy-and-culture-forward lens while still covering finance and markets; do not let finance dominate the narrative.
 - In the Contextual analysis section, create a subhead for each context input using its exact text (e.g., <h4>Context text</h4>) and follow with 1-2 short paragraphs.
 - Each section should clearly reflect the research plan (search terms, key sources, methods) even if you do not output that plan.
@@ -238,7 +240,7 @@ Requirements:
   });
 
   return {
-    html: stripIndexLinks(normalized),
+    html: shortenLinkAnchors(stripIndexLinks(normalized)),
     sourceNotes: sourcesText
   };
 }
@@ -533,4 +535,29 @@ function stripIndexLinks(input: string) {
     return `${open}${withoutLinks}${close}`;
   });
   return html;
+}
+
+function shortenLinkAnchors(html: string) {
+  if (!html) return html;
+  return html.replace(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi, (match, attrs, inner) => {
+    const textOnly = inner.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+    if (!textOnly) return match;
+
+    const sentenceSplit = textOnly.split(/(?<=[.!?])\s+/);
+    let candidate = sentenceSplit[0] ?? textOnly;
+    const words = candidate.split(/\s+/);
+    if (words.length > 6) {
+      candidate = words.slice(0, 6).join(" ");
+    }
+    if (candidate.length > 60) {
+      candidate = candidate.slice(0, 60).trim();
+    }
+
+    if (candidate === textOnly) return match;
+
+    const remainderRaw = textOnly.slice(candidate.length).trimStart();
+    const needsSpace = remainderRaw && !/^[,.;:!?)]/.test(remainderRaw);
+    const remainder = remainderRaw ? `${needsSpace ? " " : ""}${remainderRaw}` : "";
+    return `<a${attrs}>${candidate}</a>${remainder}`;
+  });
 }
