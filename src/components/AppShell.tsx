@@ -5,8 +5,16 @@ import { signOut } from "next-auth/react";
 import { Dashboard } from "@/components/Dashboard";
 import { Automation } from "@/components/Automation";
 
-export function AppShell() {
-  const [tab, setTab] = useState<"dashboard" | "automation">("dashboard");
+export function AppShell({
+  initialTab = "dashboard",
+  initialReviewOpen = false,
+  initialReviewMonth
+}: {
+  initialTab?: "dashboard" | "automation";
+  initialReviewOpen?: boolean;
+  initialReviewMonth?: string;
+}) {
+  const [tab, setTab] = useState<"dashboard" | "automation">(initialTab);
 
   return (
     <div className="min-h-screen bg-sand-50">
@@ -44,7 +52,11 @@ export function AppShell() {
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-6 py-10">
-        {tab === "dashboard" ? <Dashboard /> : <Automation />}
+        {tab === "dashboard" ? (
+          <Dashboard />
+        ) : (
+          <Automation initialReviewOpen={initialReviewOpen} initialReviewMonth={initialReviewMonth} />
+        )}
       </main>
     </div>
   );

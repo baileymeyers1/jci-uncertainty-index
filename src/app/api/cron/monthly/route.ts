@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { runMonthlyIngest } from "@/lib/ingest/runMonthlyIngest";
-import { prisma } from "@/lib/prisma";
-import { formatMonthLabel } from "@/lib/sheets";
-import { generateNewsletterHTML } from "@/lib/newsletter/generate";
+import { sendMonthlyApprovalEmail } from "@/lib/approval-email";
+import { requireApprovalRecipients } from "@/lib/approval-workflow";
 import { sendAdminAlert } from "@/lib/brevo";
 import { getEnv } from "@/lib/env";
 
@@ -15,30 +14,9 @@ export async function POST(req: Request) {
   }
 
   try {
+    const recipients = await requireApprovalRecipients();
     const ingestResult = await runMonthlyIngest();
-
-    const monthLabel = formatMonthLabel(new Date());
-    const contextEntry = await prisma.contextEntry.findUnique({
-      where: { month: monthLabel }
-    });
-
-    if (contextEntry) {
-      const { html, sourceNotes } = await generateNewsletterHTML({
-        monthLabel,
-        context1: contextEntry.context1,
-        context2: contextEntry.context2,
-        context3: contextEntry.context3
-      });
-
-      await prisma.draft.create({
-        data: {
-          month: monthLabel,
-          html,
-          sourceNotes,
-          contextId: contextEntry.id
-        }
-      });
-    }
+    await sendMonthlyApprovalEmail(ingestResult.month);
 
     const warningHtml = ingestResult.warnings?.length
       ? `<p>Validation warnings: ${ingestResult.warnings.join("; ")}</p>`
@@ -46,7 +24,7 @@ export async function POST(req: Request) {
     try {
       await sendAdminAlert(
         "JCI Uncertainty Index monthly automation",
-        `<p>Monthly ingest completed for ${ingestResult.month}. Draft ${contextEntry ? "generated" : "skipped (no context)"}.</p>${warningHtml}`
+        `<p>Monthly ingest completed for ${ingestResult.month}. Approval email sent to ${recipients.length} approver(s).</p>${warningHtml}`
       );
     } catch (alertError) {
       console.error("Admin alert failed", alertError);

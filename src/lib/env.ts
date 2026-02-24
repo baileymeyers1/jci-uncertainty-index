@@ -17,7 +17,6 @@ const envSchema = z.object({
   BREVO_API_KEY: z.string().min(1),
   BREVO_SENDER_EMAIL: z.string().email(),
   BREVO_SENDER_NAME: z.string().min(1),
-  BREVO_LIST_ID: z.string().min(1),
   ADMIN_ALERT_EMAIL: z.string().email(),
   CRON_SECRET: z.string().min(1),
   NEWSLETTER_ASSET_BASE_URL: z.string().url().optional()

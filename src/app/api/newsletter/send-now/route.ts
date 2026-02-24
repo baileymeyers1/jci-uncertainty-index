@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendTransactionalEmail } from "@/lib/brevo";
+import { assertMonthApproved } from "@/lib/approval-workflow";
 import { requireSession, unauthorized } from "@/lib/auth-guard";
 
 type SendMode = "single" | "selected" | "all";
@@ -24,6 +25,11 @@ export async function POST(req: Request) {
   const draft = await prisma.draft.findUnique({ where: { id: draftId } });
   if (!draft) {
     return NextResponse.json({ error: "Draft not found" }, { status: 404 });
+  }
+
+  const gate = await assertMonthApproved(draft.month);
+  if (!gate.ok) {
+    return NextResponse.json({ error: gate.reason }, { status: 409 });
   }
 
   const subject = `JCI Uncertainty Index — ${draft.month}`;

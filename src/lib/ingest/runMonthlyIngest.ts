@@ -13,6 +13,7 @@ import {
   upsertMonthlyRowPartial
 } from "@/lib/sheets";
 import { format } from "date-fns";
+import { advanceSourceReleaseSchedule } from "@/lib/approval-workflow";
 
 export async function runMonthlyIngest(targetMonth?: Date) {
   const monthDate = targetMonth ?? new Date();
@@ -55,12 +56,16 @@ export async function runMonthlyIngest(targetMonth?: Date) {
 
     for (const adapter of surveyAdapters) {
       const normalizedHeader = normalizeHeader(adapter.sheetHeader);
+      const previousValue = parseNumericValue(latestRowMap[normalizedHeader]);
       if (!headerSet.has(normalizedHeader)) {
         await prisma.sourceValue.create({
           data: {
             ingestId: ingestRun.id,
             sourceName: adapter.name,
             sourceUrl: adapter.sourceUrl,
+            previousValue,
+            delta: null,
+            carriedForward: false,
             status: "MISSING_HEADER",
             message: "Sheet header not found"
           }
@@ -75,8 +80,7 @@ export async function runMonthlyIngest(targetMonth?: Date) {
 
         let carriedForward = false;
         if (finalValue === null || !acceptable) {
-          const carry = latestRowMap[normalizedHeader];
-          finalValue = carry ? Number(carry) : null;
+          finalValue = previousValue;
           carriedForward = true;
         }
 
@@ -92,6 +96,7 @@ export async function runMonthlyIngest(targetMonth?: Date) {
         }
 
         rowData[normalizedHeader] = finalValue;
+        const delta = calculateDelta(finalValue, previousValue);
         const validation = validateValue(normalizedHeader, finalValue, metaStats);
         const status = validation ? "warning" : result.status;
         if (validation) {
@@ -107,14 +112,20 @@ export async function runMonthlyIngest(targetMonth?: Date) {
             sourceName: adapter.name,
             sourceUrl: adapter.sourceUrl,
             value: finalValue,
+            previousValue,
+            delta,
+            carriedForward,
             valueDate: result.valueDate ?? monthDate,
             status,
             message: [result.message, validation, carryMessage, lockMessage].filter(Boolean).join(" | ") || null
           }
         });
+
+        if (!carriedForward && finalValue !== null && finalValue !== undefined) {
+          await advanceSourceReleaseSchedule(adapter.name, result.valueDate ?? monthDate);
+        }
       } catch (error) {
-        const carry = latestRowMap[normalizedHeader];
-        let finalValue: number | null = carry ? Number(carry) : null;
+        let finalValue: number | null = previousValue;
         let lockedValue = false;
         if (isHistorical && existingRow) {
           const existingIdx = headerIndexMap.get(normalizedHeader);
@@ -126,6 +137,7 @@ export async function runMonthlyIngest(targetMonth?: Date) {
           }
         }
         rowData[normalizedHeader] = finalValue;
+        const delta = calculateDelta(finalValue, previousValue);
 
         await prisma.sourceValue.create({
           data: {
@@ -133,6 +145,9 @@ export async function runMonthlyIngest(targetMonth?: Date) {
             sourceName: adapter.name,
             sourceUrl: adapter.sourceUrl,
             value: finalValue,
+            previousValue,
+            delta,
+            carriedForward: true,
             valueDate: monthDate,
             status: "failed",
             message: [
@@ -206,4 +221,17 @@ function validateValue(
     return "Negative value";
   }
   return null;
+}
+
+function parseNumericValue(value: string | undefined) {
+  if (value === undefined || value === null) return null;
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+  const num = Number(trimmed);
+  return Number.isFinite(num) ? num : null;
+}
+
+function calculateDelta(current: number | null, previous: number | null) {
+  if (current === null || previous === null) return null;
+  return current - previous;
 }

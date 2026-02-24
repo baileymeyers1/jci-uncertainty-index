@@ -6,8 +6,7 @@ export async function GET() {
   const session = await requireSession();
   if (!session) return unauthorized();
   const drafts = await prisma.draft.findMany({
-    orderBy: { createdAt: "desc" },
-    include: { sendSchedule: true }
+    orderBy: { createdAt: "desc" }
   });
   const contexts = await prisma.contextEntry.findMany({ orderBy: { createdAt: "desc" } });
   const recipients = await prisma.recipient.findMany({ orderBy: { createdAt: "desc" } });

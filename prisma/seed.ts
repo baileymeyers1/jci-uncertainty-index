@@ -14,6 +14,11 @@ async function main() {
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
     console.log("Admin already exists");
+    await prisma.approvalRecipient.upsert({
+      where: { userId: existing.id },
+      update: {},
+      create: { userId: existing.id }
+    });
     return;
   }
 
@@ -25,6 +30,15 @@ async function main() {
       name: "Admin"
     }
   });
+
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (user) {
+    await prisma.approvalRecipient.upsert({
+      where: { userId: user.id },
+      update: {},
+      create: { userId: user.id }
+    });
+  }
 
   console.log("Admin user created");
 }

@@ -21,13 +21,17 @@ Full-stack Next.js app for the JCI Uncertainty Index dashboard and newsletter au
    ```bash
    npm run db:seed
    ```
-6. Run the dev server:
+6. Bootstrap approval workflow records (release schedules, historical approval state, and default approver):
+   ```bash
+   npm run db:bootstrap-approval
+   ```
+7. Run the dev server:
    ```bash
    npm run dev
    ```
 
 ## Cron
-Vercel cron is configured in `vercel.json` to hit `/api/cron/monthly` on the 2nd of each month at 12:00 UTC (7-8am US Eastern, depending on DST).
+Vercel cron is configured in `vercel.json` to hit `/api/cron/monthly` on the 2nd of each month at 14:00 UTC (9am US Eastern in standard time, 10am US Eastern in daylight time).
 
 ## Deployment (Vercel)
 1. Push this repo to GitHub (private recommended).
@@ -41,5 +45,6 @@ Vercel cron is configured in `vercel.json` to hit `/api/cron/monthly` on the 2nd
 - Google Sheets is the source of truth for calculated values.
 - Survey adapters live in `src/lib/ingest/adapters/sources.ts`. Several use HTML scraping and may need tuning if site copy changes.
 - FRED API key is required for UMCSENT, USEPUINDXD, and USACSCICP02STSAM series.
-- The app stores draft HTML and uses Brevo marketing campaigns for scheduled sends.
+- Monthly workflow is approval-first: ingest sends an approval request email to approvers, and draft generation/sending stays blocked until all source rows are approved for that month.
+- Final newsletter distribution is manual transactional send only (`all`, `selected`, or `single`) from the app.
 - Ingest validation flags outliers when |z| >= 4 using Meta tab mean/stdev; warnings are included in admin alerts.

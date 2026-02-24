@@ -11,7 +11,8 @@
     "prisma": "prisma",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "db:seed": "ts-node --transpile-only prisma/seed.ts"
+    "db:seed": "ts-node --transpile-only prisma/seed.ts",
+    "db:bootstrap-approval": "ts-node --transpile-only scripts/bootstrap-approval-workflow.ts"
   },
   "dependencies": {
     "@fontsource/eb-garamond": "^5.2.7",

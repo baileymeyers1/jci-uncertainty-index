@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { formatMonthLabel } from "@/lib/sheets";
+import { assertMonthApproved } from "@/lib/approval-workflow";
 import { generateNewsletterHTML } from "@/lib/newsletter/generate";
 import { requireSession, unauthorized } from "@/lib/auth-guard";
 
@@ -16,6 +17,10 @@ export async function POST(req: Request) {
     }
 
     const monthLabel = month ?? formatMonthLabel(new Date());
+    const gate = await assertMonthApproved(monthLabel);
+    if (!gate.ok) {
+      return NextResponse.json({ error: gate.reason }, { status: 409 });
+    }
 
     const contextEntry = await prisma.contextEntry.upsert({
       where: { month: monthLabel },

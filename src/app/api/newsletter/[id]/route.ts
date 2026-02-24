@@ -23,17 +23,10 @@ export async function DELETE(_: Request, { params }: { params: { id: string } })
   const session = await requireSession();
   if (!session) return unauthorized();
 
-  const draft = await prisma.draft.findUnique({
-    where: { id: params.id },
-    include: { sendSchedule: true }
-  });
+  const draft = await prisma.draft.findUnique({ where: { id: params.id } });
 
   if (!draft) {
     return NextResponse.json({ error: "Draft not found" }, { status: 404 });
-  }
-
-  if (draft.status === "QUEUED" || draft.sendSchedule?.status === "QUEUED") {
-    return NextResponse.json({ error: "Queued drafts cannot be deleted." }, { status: 409 });
   }
 
   await prisma.sendSchedule.deleteMany({ where: { draftId: draft.id } });

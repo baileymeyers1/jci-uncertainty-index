@@ -19,6 +19,12 @@ enum IngestStatus {
   FAILED
 }
 
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -29,6 +35,8 @@ model User {
   updatedAt    DateTime @updatedAt
   sessions     Session[]
   accounts     Account[]
+  approvalRecipient ApprovalRecipient?
+  approvedSourceValues SourceValue[]
 }
 
 model Session {
@@ -73,6 +81,14 @@ model Recipient {
   status    String   @default("ACTIVE")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model ApprovalRecipient {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model RecipientSync {
@@ -151,8 +167,25 @@ model SourceValue {
   sourceName String
   sourceUrl  String
   value      Float?
+  previousValue Float?
+  delta      Float?
+  carriedForward Boolean @default(false)
   valueDate  DateTime?
   status     String
   message    String?
+  approvalStatus ApprovalStatus @default(PENDING)
+  approvalNote String?
+  approvedAt DateTime?
+  approvedByUserId String?
+  approvedByUser User? @relation(fields: [approvedByUserId], references: [id], onDelete: SetNull)
   ingestRun  IngestRun @relation(fields: [ingestId], references: [id], onDelete: Cascade)
+}
+
+model SourceReleaseSchedule {
+  id                      String   @id @default(cuid())
+  sourceName              String   @unique
+  advanceMonths           Int      @default(1)
+  nextExpectedReleaseDate DateTime
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 }
