@@ -3,6 +3,7 @@ import { subMonths } from "date-fns";
 import { runMonthlyIngest } from "@/lib/ingest/runMonthlyIngest";
 import { formatMonthLabel } from "@/lib/month";
 import { requireSession, unauthorized } from "@/lib/auth-guard";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(req: Request) {
   const session = await requireSession();
@@ -14,15 +15,40 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid months" }, { status: 400 });
   }
 
-  const results: Array<{ month: string; status: "SUCCESS" | "FAILED"; error?: string }> = [];
+  const force = Boolean(body?.force);
+  const existingMonths = new Set(
+    (
+      await prisma.ingestRun.findMany({
+        where: { status: "SUCCESS" },
+        select: { month: true }
+      })
+    ).map((run) => run.month)
+  );
+
+  const results: Array<{
+    month: string;
+    status: "SUCCESS" | "FAILED" | "SKIPPED";
+    error?: string;
+  }> = [];
   for (let i = 0; i < months; i += 1) {
     const target = subMonths(new Date(), i);
+    const targetMonth = formatMonthLabel(target);
+    if (!force && existingMonths.has(targetMonth)) {
+      results.push({
+        month: targetMonth,
+        status: "SKIPPED",
+        error: "Existing successful ingest run already present for month"
+      });
+      continue;
+    }
+
     try {
       const result = await runMonthlyIngest(target);
       results.push({ month: result.month, status: "SUCCESS" });
+      existingMonths.add(result.month);
     } catch (error) {
       results.push({
-        month: formatMonthLabel(target),
+        month: targetMonth,
         status: "FAILED",
         error: error instanceof Error ? error.message : "Unknown error"
       });

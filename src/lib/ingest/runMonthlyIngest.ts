@@ -6,6 +6,7 @@ import { surveyAdapters } from "@/lib/ingest/adapters/sources";
 import { getMetaStatsMap } from "@/lib/analytics";
 import { advanceSourceReleaseSchedule } from "@/lib/approval-workflow";
 import { formatMonthLabel, monthStart, parseMonthLabel } from "@/lib/month";
+import { shouldUseHistoricalFallback } from "@/lib/ingest/backfill-policy";
 
 function normalizeName(value: string) {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
@@ -66,6 +67,7 @@ async function getPreviousValueMap(targetMonth: Date) {
 export async function runMonthlyIngest(targetMonth?: Date) {
   const monthDate = targetMonth ?? new Date();
   const monthLabel = formatMonthLabel(monthDate);
+  const executionDate = new Date();
 
   const ingestRun = await prisma.ingestRun.create({
     data: {
@@ -83,6 +85,32 @@ export async function runMonthlyIngest(targetMonth?: Date) {
 
     for (const adapter of surveyAdapters) {
       const previousValue = previousValueMap.get(adapter.name) ?? null;
+
+      if (shouldUseHistoricalFallback(adapter, monthDate, executionDate)) {
+        const finalValue = previousValue;
+        const delta = calculateDelta(finalValue, previousValue);
+        const carryReason =
+          "Historical backfill unavailable for latest-snapshot adapter";
+        warnings.push(
+          `${adapter.sheetHeader}: Carry-forward hard warning (${carryReason})`
+        );
+
+        await prisma.sourceValue.create({
+          data: {
+            ingestId: ingestRun.id,
+            sourceName: adapter.name,
+            sourceUrl: adapter.sourceUrl,
+            value: finalValue,
+            previousValue,
+            delta,
+            carriedForward: true,
+            valueDate: monthDate,
+            status: "warning",
+            message: `Carried forward prior value (hard warning: ${carryReason})`
+          }
+        });
+        continue;
+      }
 
       try {
         const result = await adapter.fetchValue(monthDate);

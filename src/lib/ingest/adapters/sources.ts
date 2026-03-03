@@ -19,6 +19,7 @@ export const surveyAdapters: SurveyAdapter[] = [
     frequency: "monthly",
     sourceUrl: "https://fred.stlouisfed.org/series/UMCSENT",
     releaseCadence: "Monthly",
+    supportsHistorical: true,
     fetchValue: async (targetMonth) => {
       const cutoff = new Date(targetMonth.getFullYear(), targetMonth.getMonth(), 0);
       const result = await fredLatestValueBefore("UMCSENT", cutoff);
@@ -32,6 +33,7 @@ export const surveyAdapters: SurveyAdapter[] = [
     frequency: "monthly",
     sourceUrl: "https://www.conference-board.org/topics/consumer-confidence/",
     releaseCadence: "Monthly",
+    supportsHistorical: true,
     fetchValue: async (targetMonth) => {
       return fetchConferenceBoardConfidence(targetMonth);
     }
@@ -42,6 +44,7 @@ export const surveyAdapters: SurveyAdapter[] = [
     frequency: "monthly",
     sourceUrl: "https://www.newyorkfed.org/microeconomics/sce",
     releaseCadence: "Monthly",
+    supportsHistorical: true,
     fetchValue: async (targetMonth) => {
       const result = await getNyFedInflationMedian(targetMonth);
       if (!result) return { value: null, status: "missing" };
@@ -54,6 +57,7 @@ export const surveyAdapters: SurveyAdapter[] = [
     frequency: "quarterly",
     sourceUrl: "https://www.richmondfed.org/research/national_economy/cfo_survey/data_and_results",
     releaseCadence: "Quarterly",
+    supportsHistorical: true,
     fetchValue: async (targetMonth) => {
       const latest = await getLatestCfoValue(targetMonth);
       if (!latest) return { value: null, status: "missing" };
@@ -66,6 +70,7 @@ export const surveyAdapters: SurveyAdapter[] = [
     frequency: "monthly",
     sourceUrl: "https://www.nfib.com/news/monthly_report/sbet/",
     releaseCadence: "Monthly",
+    supportsHistorical: false,
     fetchValue: async () => {
       const { optimism } = await scrapeNfibIndices();
       if (optimism === null) return { value: null, status: "missing" };
@@ -78,6 +83,7 @@ export const surveyAdapters: SurveyAdapter[] = [
     frequency: "quarterly",
     sourceUrl: "https://www.businessroundtable.org/media/ceo-economic-outlook-index",
     releaseCadence: "Quarterly",
+    supportsHistorical: false,
     fetchValue: async () => {
       const value = await scrapeBusinessRoundtableOutlook();
       if (value === null) return { value: null, status: "missing" };
@@ -90,6 +96,7 @@ export const surveyAdapters: SurveyAdapter[] = [
     frequency: "quarterly",
     sourceUrl: "https://www.richmondfed.org/research/national_economy/cfo_survey/data_and_results",
     releaseCadence: "Quarterly",
+    supportsHistorical: true,
     fetchValue: async (targetMonth) => {
       const latest = await getLatestCfoValue(targetMonth);
       if (!latest) return { value: null, status: "missing" };
@@ -102,6 +109,7 @@ export const surveyAdapters: SurveyAdapter[] = [
     frequency: "quarterly",
     sourceUrl: "https://www.ey.com/en_us/ceo/ceo-outlook-global-report",
     releaseCadence: "Quarterly",
+    supportsHistorical: false,
     fetchValue: async () => {
       const value = await scrapeEyParthenonConfidence();
       if (value === null) return { value: null, status: "missing" };
@@ -114,6 +122,7 @@ export const surveyAdapters: SurveyAdapter[] = [
     frequency: "quarterly",
     sourceUrl: "https://www.deloitte.com/us/en/insights/topics/leadership/cfo-survey-data-dashboard.html",
     releaseCadence: "Quarterly",
+    supportsHistorical: false,
     fetchValue: async () => {
       const value = await scrapeDeloitteCfoConfidence();
       if (value === null) return { value: null, status: "missing" };
@@ -126,6 +135,7 @@ export const surveyAdapters: SurveyAdapter[] = [
     frequency: "monthly",
     sourceUrl: "https://www.policyuncertainty.com/us_monthly.html",
     releaseCadence: "Monthly",
+    supportsHistorical: true,
     fetchValue: async (targetMonth) => {
       const result = await getPolicyUncertaintyMonthlyValue(targetMonth);
       if (!result) return { value: null, status: "missing" };
@@ -138,6 +148,7 @@ export const surveyAdapters: SurveyAdapter[] = [
     frequency: "monthly",
     sourceUrl: "https://www.nfib.com/news/monthly_report/sbet/",
     releaseCadence: "Monthly",
+    supportsHistorical: false,
     fetchValue: async () => {
       const { uncertainty } = await scrapeNfibIndices();
       if (uncertainty === null) return { value: null, status: "missing" };
@@ -150,6 +161,7 @@ export const surveyAdapters: SurveyAdapter[] = [
     frequency: "monthly",
     sourceUrl: "https://www.atlantafed.org/research-and-data/surveys/business-uncertainty",
     releaseCadence: "Monthly",
+    supportsHistorical: true,
     fetchValue: async (targetMonth) => {
       const result = await getSbuSeriesValue({ targetMonth, series: "empgrowth" });
       if (!result) return { value: null, status: "missing" };
@@ -162,6 +174,7 @@ export const surveyAdapters: SurveyAdapter[] = [
     frequency: "monthly",
     sourceUrl: "https://www.atlantafed.org/research-and-data/surveys/business-uncertainty",
     releaseCadence: "Monthly",
+    supportsHistorical: true,
     fetchValue: async (targetMonth) => {
       const result = await getSbuSeriesValue({ targetMonth, series: "revgrowth" });
       if (!result) return { value: null, status: "missing" };
@@ -174,6 +187,7 @@ export const surveyAdapters: SurveyAdapter[] = [
     frequency: "monthly",
     sourceUrl: "https://fred.stlouisfed.org/series/USACSCICP02STSAM",
     releaseCadence: "Monthly",
+    supportsHistorical: true,
     fetchValue: async (targetMonth) => {
       const cutoff = new Date(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 0);
       const result = await fredLatestValueBefore("USACSCICP02STSAM", cutoff);

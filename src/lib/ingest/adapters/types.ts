@@ -13,5 +13,6 @@ export interface SurveyAdapter {
   frequency: Frequency;
   sourceUrl: string;
   releaseCadence: string;
+  supportsHistorical?: boolean;
   fetchValue: (targetMonth: Date) => Promise<AdapterResult>;
 }
