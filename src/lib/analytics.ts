@@ -4,6 +4,12 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { compareMonthLabels, parseMonthLabel, toMonthKey } from "@/lib/month";
 import { surveyAdapters } from "@/lib/ingest/adapters/sources";
+import {
+  applyMetaFallbacks,
+  computeMetricsForSources,
+  type MetaRow,
+  type MetricComputation
+} from "@/lib/analytics-core";
 
 type RunWithSources = Prisma.IngestRunGetPayload<{
   include: { sources: true };
@@ -38,44 +44,8 @@ export interface OverviewData {
   };
 }
 
-export interface MetricComputation {
-  sourceZScores: Record<string, number | null>;
-  indexZ: number | null;
-  indexScore: number | null;
-  percentile: number | null;
-}
-
-interface MetaRow {
-  sourceName: string;
-  mean: number | null;
-  stdev: number | null;
-  direction: number | null;
-  weight: number | null;
-}
-
 function normalizeSourceName(value: string) {
   return value.trim().replace(/\s+/g, " ").toLowerCase();
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
-}
-
-function standardNormalCdf(value: number) {
-  // Abramowitz-Stegun erf approximation.
-  const sign = value < 0 ? -1 : 1;
-  const x = Math.abs(value) / Math.sqrt(2);
-  const t = 1 / (1 + 0.3275911 * x);
-  const a1 = 0.254829592;
-  const a2 = -0.284496736;
-  const a3 = 1.421413741;
-  const a4 = -1.453152027;
-  const a5 = 1.061405429;
-  const erf =
-    1 -
-    (((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t) *
-      Math.exp(-x * x);
-  return 0.5 * (1 + sign * erf);
 }
 
 function assertIndexSeriesConsistency(indexSeries: IndexPoint[]) {
@@ -116,6 +86,11 @@ export async function getMetaBySourceMap() {
   return map;
 }
 
+async function getEffectiveMetaBySourceMap(runs: RunWithSources[]) {
+  const storedMetaBySource = await getMetaBySourceMap();
+  return applyMetaFallbacks(storedMetaBySource, runs);
+}
+
 export async function getLatestSuccessfulRunsByMonth() {
   const runs = await prisma.ingestRun.findMany({
     where: { status: "SUCCESS" },
@@ -135,59 +110,12 @@ export async function getLatestSuccessfulRunsByMonth() {
   );
 }
 
-export function computeMetricsForSources(
-  sources: Array<{ sourceName: string; value: number | null }>,
-  metaBySource: Map<string, MetaRow>
-): MetricComputation {
-  const sourceZScores: Record<string, number | null> = {};
-  let weightedSum = 0;
-  let weightTotal = 0;
-
-  for (const source of sources) {
-    const key = normalizeSourceName(source.sourceName);
-    const meta = metaBySource.get(key);
-
-    if (
-      source.value === null ||
-      source.value === undefined ||
-      !meta ||
-      meta.mean === null ||
-      meta.mean === undefined ||
-      meta.stdev === null ||
-      meta.stdev === undefined ||
-      meta.stdev === 0
-    ) {
-      sourceZScores[source.sourceName] = null;
-      continue;
-    }
-
-    const direction = meta.direction ?? 1;
-    const z = ((source.value - meta.mean) / meta.stdev) * direction;
-    sourceZScores[source.sourceName] = z;
-
-    if (meta.weight !== null && meta.weight !== undefined && Number.isFinite(meta.weight)) {
-      weightedSum += z * meta.weight;
-      weightTotal += meta.weight;
-    }
-  }
-
-  const indexZ = weightTotal > 0 ? weightedSum / weightTotal : null;
-  const indexScore = indexZ === null ? null : clamp(50 + 10 * indexZ, 0, 100);
-  const percentile = indexZ === null ? null : standardNormalCdf(indexZ);
-
-  return {
-    sourceZScores,
-    indexZ,
-    indexScore,
-    percentile
-  };
-}
+export { applyMetaFallbacks, computeMetricsForSources };
+export type { MetricComputation, MetaRow };
 
 export async function getOverviewData(): Promise<OverviewData> {
-  const [runs, metaBySource] = await Promise.all([
-    getLatestSuccessfulRunsByMonth(),
-    getMetaBySourceMap()
-  ]);
+  const runs = await getLatestSuccessfulRunsByMonth();
+  const metaBySource = await getEffectiveMetaBySourceMap(runs);
 
   const adapterOrder = surveyAdapters.map((adapter) => adapter.name);
   const rawBySource = new Map<string, SeriesPoint[]>();
@@ -264,10 +192,8 @@ export async function getOverviewData(): Promise<OverviewData> {
 }
 
 export async function getLatestRunValuesAndZScores() {
-  const [runs, metaBySource] = await Promise.all([
-    getLatestSuccessfulRunsByMonth(),
-    getMetaBySourceMap()
-  ]);
+  const runs = await getLatestSuccessfulRunsByMonth();
+  const metaBySource = await getEffectiveMetaBySourceMap(runs);
   const latestRun = runs.length ? runs[runs.length - 1] : null;
   const valueMap: Record<string, number | null> = {};
   const zMap: Record<string, number | null> = {};
@@ -287,10 +213,8 @@ export async function getLatestRunValuesAndZScores() {
 
 export async function getZScoresForMonths(monthLabels: string[]) {
   const targetKeys = new Set(monthLabels.map((label) => toMonthKey(label)));
-  const [runs, metaBySource] = await Promise.all([
-    getLatestSuccessfulRunsByMonth(),
-    getMetaBySourceMap()
-  ]);
+  const runs = await getLatestSuccessfulRunsByMonth();
+  const metaBySource = await getEffectiveMetaBySourceMap(runs);
   const map = new Map<string, Record<string, number | null>>();
 
   runs.forEach((run) => {

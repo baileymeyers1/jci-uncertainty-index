@@ -17,7 +17,7 @@
     "db:migrate-sheet-to-db": "ts-node --transpile-only scripts/migrate-sheet-to-db.ts",
     "db:verify-sheet-parity": "ts-node --transpile-only scripts/verify-sheet-parity.ts",
     "db:remediate-mar-2026": "ts-node --transpile-only --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' scripts/remediate-mar-2026-stabilization.ts",
-    "test:stabilization": "npx ts-node --transpile-only --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' tests/stabilization/adapters-regression.test.ts && npx ts-node --transpile-only --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' tests/stabilization/source-schedules-regression.test.ts"
+    "test:stabilization": "npx ts-node --transpile-only --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' tests/stabilization/adapters-regression.test.ts && npx ts-node --transpile-only --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' tests/stabilization/source-schedules-regression.test.ts && npx ts-node --transpile-only --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\"}' tests/stabilization/analytics-regression.test.ts"
   },
   "dependencies": {
     "@fontsource/eb-garamond": "^5.2.7",
