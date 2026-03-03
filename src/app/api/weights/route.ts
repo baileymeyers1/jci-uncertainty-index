@@ -1,74 +1,78 @@
 import { NextResponse } from "next/server";
-import { getLatestDataRowMap, getLatestZScoreRowMap, getMetaWeights, normalizeHeader, updateMetaWeight } from "@/lib/sheets";
+import { prisma } from "@/lib/prisma";
+import { getLatestRunValuesAndZScores } from "@/lib/analytics";
 import { surveyAdapters } from "@/lib/ingest/adapters/sources";
 import { requireSession, unauthorized } from "@/lib/auth-guard";
+
+function normalizeKey(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function findAdapterBySurvey(survey: string) {
+  const key = normalizeKey(survey);
+  return surveyAdapters.find(
+    (adapter) =>
+      normalizeKey(adapter.name) === key ||
+      normalizeKey(adapter.sheetHeader) === key
+  );
+}
 
 export async function GET() {
   const session = await requireSession();
   if (!session) return unauthorized();
-  const weights = await getMetaWeights();
-  const latestRow = await getLatestDataRowMap();
-  const latestZ = await getLatestZScoreRowMap();
-  const metaMap = new Map(weights.map((row) => [normalizeHeader(row.survey), row]));
-  const metaEntries = Array.from(metaMap.entries());
-  const zEntries = Object.entries(latestZ);
 
-  function matchMeta(key: string) {
-    const direct = metaMap.get(key);
-    if (direct) return direct;
-    const lower = key.toLowerCase();
-    for (const [metaKey, entry] of metaEntries) {
-      if (metaKey.toLowerCase() === lower) return entry;
-    }
-    for (const [metaKey, entry] of metaEntries) {
-      const metaLower = metaKey.toLowerCase();
-      if (metaLower.startsWith(lower) || lower.startsWith(metaLower)) return entry;
-    }
-    return undefined;
-  }
+  const [metaRows, latest] = await Promise.all([
+    prisma.surveyMeta.findMany(),
+    getLatestRunValuesAndZScores()
+  ]);
 
-  function matchZ(key: string) {
-    if (latestZ[key] !== undefined) return latestZ[key];
-    const lower = key.toLowerCase();
-    for (const [zKey, value] of zEntries) {
-      if (zKey.toLowerCase() === lower) return value;
-    }
-    for (const [zKey, value] of zEntries) {
-      const zLower = zKey.toLowerCase();
-      if (zLower.startsWith(lower) || lower.startsWith(zLower)) return value;
-    }
-    return null;
-  }
+  const metaMap = new Map(
+    metaRows.map((row) => [normalizeKey(row.sourceName), row])
+  );
+
   const entries = surveyAdapters.map((adapter) => {
-    const key = normalizeHeader(adapter.sheetHeader);
-    const meta = matchMeta(key);
-    const latestValueRaw = latestRow[key];
-    const latestValue = latestValueRaw !== undefined && latestValueRaw !== "" ? Number(latestValueRaw) : null;
-    const isEpu = key.toLowerCase().includes("economic policy uncertainty index");
-    const fallbackMean = isEpu ? 116.7817 : null;
-    const fallbackStdev = isEpu ? 71.0487 : null;
+    const key = normalizeKey(adapter.name);
+    const meta = metaMap.get(key);
+    const latestValue = latest.valueMap[adapter.name] ?? null;
+    const latestZ = latest.zMap[adapter.name] ?? null;
+
     return {
       survey: adapter.sheetHeader,
       weight: meta?.weight ?? null,
-      mean: meta?.mean ?? fallbackMean,
-      stdev: meta?.stdev ?? fallbackStdev,
+      mean: meta?.mean ?? null,
+      stdev: meta?.stdev ?? null,
       frequency: adapter.frequency,
       sourceUrl: adapter.sourceUrl,
-      latestValue: Number.isFinite(latestValue) ? latestValue : null,
-      latestZ: matchZ(key)
+      latestValue,
+      latestZ
     };
   });
+
   return NextResponse.json({ weights: entries });
 }
 
 export async function POST(req: Request) {
   const session = await requireSession();
   if (!session) return unauthorized();
-  const body = await req.json();
-  const { survey, weight } = body;
-  if (!survey || typeof weight !== "number") {
+
+  const body = await req.json().catch(() => ({}));
+  const survey = String(body?.survey ?? "").trim();
+  const weight = Number(body?.weight);
+
+  if (!survey || !Number.isFinite(weight)) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
-  await updateMetaWeight(survey, weight);
+
+  const adapter = findAdapterBySurvey(survey);
+  if (!adapter) {
+    return NextResponse.json({ error: "Unknown survey" }, { status: 404 });
+  }
+
+  await prisma.surveyMeta.upsert({
+    where: { sourceName: adapter.name },
+    update: { weight },
+    create: { sourceName: adapter.name, weight }
+  });
+
   return NextResponse.json({ status: "ok" });
 }

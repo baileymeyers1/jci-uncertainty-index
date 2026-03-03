@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { formatMonthLabel } from "@/lib/sheets";
+import { formatMonthLabel } from "@/lib/month";
 import { assertMonthApproved } from "@/lib/approval-workflow";
 import { generateNewsletterHTML } from "@/lib/newsletter/generate";
 import { requireSession, unauthorized } from "@/lib/auth-guard";

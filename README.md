@@ -21,11 +21,21 @@ Full-stack Next.js app for the JCI Uncertainty Index dashboard and newsletter au
    ```bash
    npm run db:seed
    ```
-6. Bootstrap approval workflow records (release schedules, historical approval state, and default approver):
+6. Bootstrap approval workflow records (researched release schedules, historical approval state, and default approver):
    ```bash
    npm run db:bootstrap-approval
    ```
-7. Run the dev server:
+7. Optional one-time migration from Google Sheets into Postgres:
+   ```bash
+   npm run db:migrate-sheet-to-db
+   npm run db:seed-release-schedules
+   npm run db:verify-sheet-parity
+   ```
+8. Optional one-time March 2026 stabilization remediation:
+   ```bash
+   npm run db:remediate-mar-2026
+   ```
+9. Run the dev server:
    ```bash
    npm run dev
    ```
@@ -42,9 +52,11 @@ Vercel cron is configured in `vercel.json` to hit `/api/cron/monthly` on the 2nd
 6. Deploy. Use Vercel’s dashboard to confirm the cron job fires on the 2nd.
 
 ## Notes
-- Google Sheets is the source of truth for calculated values.
+- Postgres is the runtime source of truth for raw source values, survey meta (mean/stdev/direction/weight), and computed index metrics.
+- Google Sheets is optional and only used for one-time migration + parity verification scripts.
 - Survey adapters live in `src/lib/ingest/adapters/sources.ts`. Several use HTML scraping and may need tuning if site copy changes.
-- FRED API key is required for UMCSENT, USEPUINDXD, and USACSCICP02STSAM series.
+- FRED API key is required for UMCSENT and USACSCICP02STSAM series.
 - Monthly workflow is approval-first: ingest sends an approval request email to approvers, and draft generation/sending stays blocked until all source rows are approved for that month.
 - Final newsletter distribution is manual transactional send only (`all`, `selected`, or `single`) from the app.
-- Ingest validation flags outliers when |z| >= 4 using Meta tab mean/stdev; warnings are included in admin alerts.
+- Ingest validation flags outliers when |z| >= 4 using `SurveyMeta` mean/stdev; warnings are included in admin alerts.
+- Release schedules include researched confidence metadata (`OFFICIAL` or `ESTIMATED`) plus optional evidence links/notes.

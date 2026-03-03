@@ -2,7 +2,7 @@ import "server-only";
 
 import { braveSearch } from "@/lib/newsletter/brave";
 import { callClaude } from "@/lib/newsletter/claude";
-import { getOverviewData } from "@/lib/sheets";
+import { getOverviewData } from "@/lib/analytics";
 import { getEnv } from "@/lib/env";
 import { format, isValid, parse } from "date-fns";
 

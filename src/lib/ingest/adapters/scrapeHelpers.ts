@@ -1,5 +1,3 @@
-import "server-only";
-
 const pageCache = new Map<string, { fetchedAt: number; html: string }>();
 
 export async function fetchPageHtml(url: string) {

@@ -1,11 +1,12 @@
 import { AdapterResult, SurveyAdapter } from "./types";
-import { fredLatestValueBefore, fredMonthlyAverage } from "./fred";
+import { fredLatestValueBefore } from "./fred";
 import { getSbuSeriesValue } from "./atlantaFed";
 import { getLatestCfoValue } from "./cfoSurvey";
 import { getNyFedInflationMedian } from "./nyFedSce";
+import { fetchConferenceBoardConfidence } from "./conferenceBoard";
+import { getPolicyUncertaintyMonthlyValue } from "./policyUncertainty";
 import {
   scrapeBusinessRoundtableOutlook,
-  scrapeConferenceBoardConfidence,
   scrapeDeloitteCfoConfidence,
   scrapeEyParthenonConfidence,
   scrapeNfibIndices
@@ -31,10 +32,8 @@ export const surveyAdapters: SurveyAdapter[] = [
     frequency: "monthly",
     sourceUrl: "https://www.conference-board.org/topics/consumer-confidence/",
     releaseCadence: "Monthly",
-    fetchValue: async () => {
-      const value = await scrapeConferenceBoardConfidence();
-      if (value === null) return { value: null, status: "missing" };
-      return { value, status: "success" };
+    fetchValue: async (targetMonth) => {
+      return fetchConferenceBoardConfidence(targetMonth);
     }
   },
   {
@@ -124,11 +123,11 @@ export const surveyAdapters: SurveyAdapter[] = [
   {
     name: "Economic Policy Uncertainty Index (month average)",
     sheetHeader: "Economic Policy Uncertainty Index (month average)",
-    frequency: "daily",
-    sourceUrl: "https://fred.stlouisfed.org/series/USEPUINDXD",
-    releaseCadence: "Daily",
+    frequency: "monthly",
+    sourceUrl: "https://www.policyuncertainty.com/us_monthly.html",
+    releaseCadence: "Monthly",
     fetchValue: async (targetMonth) => {
-      const result = await fredMonthlyAverage("USEPUINDXD", targetMonth);
+      const result = await getPolicyUncertaintyMonthlyValue(targetMonth);
       if (!result) return { value: null, status: "missing" };
       return { value: result.value, valueDate: result.date, status: "success" };
     }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 
 const ReactQuill = dynamic(() => import("react-quill"), { ssr: false });
@@ -61,7 +61,12 @@ interface SourceSchedule {
   frequency: string;
   releaseCadence: string;
   advanceMonths: number;
-  nextExpectedReleaseDate: string;
+  nextExpectedReleaseDate: string | null;
+  confidence: "OFFICIAL" | "ESTIMATED" | null;
+  evidenceUrl: string | null;
+  evidenceNote: string | null;
+  lastResearchedAt: string | null;
+  isResearched: boolean;
 }
 
 interface ApprovalRow {
@@ -83,6 +88,10 @@ interface ApprovalRow {
     name: string | null;
   } | null;
   nextExpectedReleaseDate: string | null;
+  releaseDateConfidence: "OFFICIAL" | "ESTIMATED" | null;
+  releaseDateEvidenceUrl: string | null;
+  releaseDateEvidenceNote: string | null;
+  releaseDateLastResearchedAt: string | null;
   dueState: "PAST_DUE" | "UPCOMING" | "UNKNOWN";
   dueLabel: string;
 }
@@ -141,7 +150,19 @@ function currentMonthLabel() {
   return new Date().toLocaleDateString("en-US", { month: "short", year: "numeric" });
 }
 
-function toDateInput(value: string) {
+function compareMonthLabelsDesc(a: string, b: string) {
+  const aDate = new Date(a);
+  const bDate = new Date(b);
+  if (!Number.isNaN(aDate.getTime()) && !Number.isNaN(bDate.getTime())) {
+    return bDate.getTime() - aDate.getTime();
+  }
+  if (!Number.isNaN(aDate.getTime())) return -1;
+  if (!Number.isNaN(bDate.getTime())) return 1;
+  return b.localeCompare(a);
+}
+
+function toDateInput(value: string | null) {
+  if (!value) return "";
   return value.slice(0, 10);
 }
 
@@ -186,14 +207,24 @@ export function Automation({
   const [reviewEdits, setReviewEdits] = useState<Record<string, string>>({});
   const [reviewNote, setReviewNote] = useState("");
 
+  const availableReviewMonths = useMemo(() => {
+    const set = new Set<string>();
+    data?.ingestRuns?.forEach((run) => {
+      if (run.month?.trim()) set.add(run.month.trim());
+    });
+    set.add(currentMonthLabel());
+    if (initialReviewMonth?.trim()) set.add(initialReviewMonth.trim());
+    return Array.from(set).sort(compareMonthLabelsDesc);
+  }, [data?.ingestRuns, initialReviewMonth]);
+
   useEffect(() => {
     if (reviewMonth) return;
-    if (!data?.ingestRuns?.length) {
+    if (!availableReviewMonths.length) {
       setReviewMonth(currentMonthLabel());
       return;
     }
-    setReviewMonth(data.ingestRuns[0].month);
-  }, [data, reviewMonth]);
+    setReviewMonth(availableReviewMonths[0]);
+  }, [availableReviewMonths, reviewMonth]);
 
   const { data: approvalMonthData, refetch: refetchApprovalMonth } = useQuery({
     queryKey: ["approval-month", reviewMonth],
@@ -438,6 +469,9 @@ export function Automation({
       sourceName: string;
       advanceMonths: number;
       nextExpectedReleaseDate: string;
+      confidence: "OFFICIAL" | "ESTIMATED";
+      evidenceUrl?: string;
+      evidenceNote?: string;
     }) => {
       const res = await fetch("/api/source-schedules", {
         method: "POST",
@@ -528,12 +562,17 @@ export function Automation({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <label className="text-sm text-ink-700">Review month</label>
-          <input
-            className="input w-40"
+          <select
+            className="input w-44"
             value={reviewMonth}
             onChange={(event) => setReviewMonth(event.target.value)}
-            placeholder="Feb 2026"
-          />
+          >
+            {availableReviewMonths.map((month) => (
+              <option key={month} value={month}>
+                {month}
+              </option>
+            ))}
+          </select>
           {approvalSnapshot ? (
             <p className={`text-sm ${approvalSnapshot.allApproved ? "text-moss-600" : "text-ember-600"}`}>
               {approvalSnapshot.allApproved
@@ -830,6 +869,8 @@ export function Automation({
                 <th className="py-2">Cadence</th>
                 <th className="py-2">Advance (months)</th>
                 <th className="py-2">Next expected release</th>
+                <th className="py-2">Confidence</th>
+                <th className="py-2">Evidence</th>
                 <th className="py-2"></th>
               </tr>
             </thead>
@@ -956,6 +997,25 @@ export function Automation({
                           <td className="py-2 text-ink-700">{row.delta ?? "—"}</td>
                           <td className="py-2 text-xs">
                             <p className={row.dueState === "PAST_DUE" ? "text-ember-600" : "text-ink-700"}>{row.dueLabel}</p>
+                            {row.releaseDateConfidence ? (
+                              <p className={row.releaseDateConfidence === "ESTIMATED" ? "text-ember-600" : "text-moss-600"}>
+                                {row.releaseDateConfidence === "ESTIMATED" ? "Estimated date" : "Official date"}
+                              </p>
+                            ) : (
+                              <p className="text-ink-600">Not researched</p>
+                            )}
+                            {row.releaseDateEvidenceUrl ? (
+                              <a
+                                className="text-ink-700 underline"
+                                href={row.releaseDateEvidenceUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                              >
+                                Evidence
+                              </a>
+                            ) : row.releaseDateEvidenceNote ? (
+                              <p className="text-ink-600">{row.releaseDateEvidenceNote}</p>
+                            ) : null}
                             {row.carriedForward ? <p className="text-ember-600">Carried forward</p> : null}
                           </td>
                           <td className="py-2 text-xs text-ink-700">{row.message ?? row.status}</td>
@@ -1098,15 +1158,34 @@ function ScheduleRow({
   onSave
 }: {
   schedule: SourceSchedule;
-  onSave: (payload: { sourceName: string; advanceMonths: number; nextExpectedReleaseDate: string }) => void;
+  onSave: (payload: {
+    sourceName: string;
+    advanceMonths: number;
+    nextExpectedReleaseDate: string;
+    confidence: "OFFICIAL" | "ESTIMATED";
+    evidenceUrl?: string;
+    evidenceNote?: string;
+  }) => void;
 }) {
   const [advanceMonths, setAdvanceMonths] = useState(String(schedule.advanceMonths));
   const [nextExpectedReleaseDate, setNextExpectedReleaseDate] = useState(toDateInput(schedule.nextExpectedReleaseDate));
+  const [confidence, setConfidence] = useState<"OFFICIAL" | "ESTIMATED">(schedule.confidence ?? "OFFICIAL");
+  const [evidenceUrl, setEvidenceUrl] = useState(schedule.evidenceUrl ?? "");
+  const [evidenceNote, setEvidenceNote] = useState(schedule.evidenceNote ?? "");
 
   useEffect(() => {
     setAdvanceMonths(String(schedule.advanceMonths));
     setNextExpectedReleaseDate(toDateInput(schedule.nextExpectedReleaseDate));
-  }, [schedule.advanceMonths, schedule.nextExpectedReleaseDate]);
+    setConfidence(schedule.confidence ?? "OFFICIAL");
+    setEvidenceUrl(schedule.evidenceUrl ?? "");
+    setEvidenceNote(schedule.evidenceNote ?? "");
+  }, [
+    schedule.advanceMonths,
+    schedule.nextExpectedReleaseDate,
+    schedule.confidence,
+    schedule.evidenceUrl,
+    schedule.evidenceNote
+  ]);
 
   return (
     <tr className="border-t border-sand-200">
@@ -1135,18 +1214,62 @@ function ScheduleRow({
           onChange={(event) => setNextExpectedReleaseDate(event.target.value)}
         />
       </td>
+      <td className="py-2">
+        <select
+          className="input"
+          value={confidence}
+          onChange={(event) => setConfidence(event.target.value as "OFFICIAL" | "ESTIMATED")}
+        >
+          <option value="OFFICIAL">Official</option>
+          <option value="ESTIMATED">Estimated</option>
+        </select>
+      </td>
+      <td className="py-2">
+        <div className="space-y-2">
+          {!schedule.isResearched ? (
+            <p className="text-xs text-ember-600">Not researched yet. Add a date and evidence.</p>
+          ) : null}
+          <input
+            className="input"
+            value={evidenceUrl}
+            onChange={(event) => setEvidenceUrl(event.target.value)}
+            placeholder="Evidence URL"
+          />
+          <input
+            className="input"
+            value={evidenceNote}
+            onChange={(event) => setEvidenceNote(event.target.value)}
+            placeholder="Evidence note (optional)"
+          />
+          {schedule.lastResearchedAt ? (
+            <p className="text-xs text-ink-600">
+              Last researched {new Date(schedule.lastResearchedAt).toLocaleDateString()}
+            </p>
+          ) : null}
+        </div>
+      </td>
       <td className="py-2 text-right">
         <button
           className="button-secondary"
           onClick={() => {
             const numericAdvanceMonths = Number(advanceMonths);
-            if (!Number.isFinite(numericAdvanceMonths) || numericAdvanceMonths < 1 || !nextExpectedReleaseDate) {
+            if (
+              !Number.isFinite(numericAdvanceMonths) ||
+              numericAdvanceMonths < 1 ||
+              !nextExpectedReleaseDate ||
+              (confidence === "ESTIMATED" && !evidenceUrl.trim())
+            ) {
               return;
             }
             onSave({
               sourceName: schedule.sourceName,
               advanceMonths: numericAdvanceMonths,
-              nextExpectedReleaseDate: new Date(`${nextExpectedReleaseDate}T12:00:00.000Z`).toISOString()
+              nextExpectedReleaseDate: new Date(
+                `${nextExpectedReleaseDate}T12:00:00.000Z`
+              ).toISOString(),
+              confidence,
+              evidenceUrl: evidenceUrl.trim() || undefined,
+              evidenceNote: evidenceNote.trim() || undefined
             });
           }}
         >

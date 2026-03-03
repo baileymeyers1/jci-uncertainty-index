@@ -2,19 +2,6 @@ import "server-only";
 
 import { fetchPageHtml, htmlToText, matchNumber } from "./scrapeHelpers";
 
-export async function scrapeConferenceBoardConfidence() {
-  const html = await fetchPageHtml("https://www.conference-board.org/topics/consumer-confidence/");
-  const text = htmlToText(html);
-  const value = matchNumber(
-    [
-      /Consumer Confidence Index[^.]*?to\s+([0-9]+(?:\.[0-9]+)?)/i,
-      /Consumer Confidence Index[^.]*?reached\s+([0-9]+(?:\.[0-9]+)?)/i
-    ],
-    text
-  );
-  return value;
-}
-
 export async function scrapeNyFedInflationMedian() {
   const html = await fetchPageHtml("https://www.newyorkfed.org/microeconomics/sce");
   const text = htmlToText(html);

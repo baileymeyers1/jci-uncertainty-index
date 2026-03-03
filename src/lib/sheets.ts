@@ -6,21 +6,36 @@ import { format, parse, isValid } from "date-fns";
 
 export type SheetValues = string[][];
 
-function getAuth() {
+function getSheetsConfig() {
   const env = getEnv();
-  const rawKey = env.GOOGLE_SHEETS_PRIVATE_KEY.replace(/^"+|"+$/g, "");
+  const clientEmail = env.GOOGLE_SHEETS_CLIENT_EMAIL;
+  const privateKey = env.GOOGLE_SHEETS_PRIVATE_KEY;
+  const sheetId = env.GOOGLE_SHEET_ID;
+
+  if (!clientEmail || !privateKey || !sheetId) {
+    throw new Error(
+      "Google Sheets credentials are not configured. They are only required for one-time migration scripts."
+    );
+  }
+
+  return { clientEmail, privateKey, sheetId };
+}
+
+function getAuth() {
+  const sheetsEnv = getSheetsConfig();
+  const rawKey = sheetsEnv.privateKey.replace(/^"+|"+$/g, "");
   return new google.auth.JWT({
-    email: env.GOOGLE_SHEETS_CLIENT_EMAIL,
+    email: sheetsEnv.clientEmail,
     key: rawKey.replace(/\\n/g, "\n"),
     scopes: ["https://www.googleapis.com/auth/spreadsheets"]
   });
 }
 
 export async function getSheetValues(sheetName: string): Promise<SheetValues> {
-  const env = getEnv();
+  const sheetsEnv = getSheetsConfig();
   const sheets = google.sheets({ version: "v4", auth: getAuth() });
   const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetsEnv.sheetId,
     range: `${sheetName}!A:AZ`
   });
   return (res.data.values as string[][]) ?? [];
@@ -80,11 +95,11 @@ function compareMonthLabels(a: string, b: string) {
 }
 
 export async function updateRow(sheetName: string, rowIndex: number, row: string[]) {
-  const env = getEnv();
+  const sheetsEnv = getSheetsConfig();
   const sheets = google.sheets({ version: "v4", auth: getAuth() });
   const rowNumber = rowIndex + 1;
   await sheets.spreadsheets.values.update({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetsEnv.sheetId,
     range: `${sheetName}!A${rowNumber}`,
     valueInputOption: "USER_ENTERED",
     requestBody: { values: [row] }
@@ -92,10 +107,10 @@ export async function updateRow(sheetName: string, rowIndex: number, row: string
 }
 
 export async function appendRow(sheetName: string, row: string[]) {
-  const env = getEnv();
+  const sheetsEnv = getSheetsConfig();
   const sheets = google.sheets({ version: "v4", auth: getAuth() });
   await sheets.spreadsheets.values.append({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetsEnv.sheetId,
     range: `${sheetName}!A:AZ`,
     valueInputOption: "USER_ENTERED",
     requestBody: { values: [row] }
@@ -114,13 +129,13 @@ function columnIndexToLetter(index: number) {
 }
 
 async function updateRowRange(sheetName: string, rowIndex: number, startCol: number, endCol: number, row: string[]) {
-  const env = getEnv();
+  const sheetsEnv = getSheetsConfig();
   const sheets = google.sheets({ version: "v4", auth: getAuth() });
   const rowNumber = rowIndex + 1;
   const startLetter = columnIndexToLetter(startCol);
   const endLetter = columnIndexToLetter(endCol);
   await sheets.spreadsheets.values.update({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetsEnv.sheetId,
     range: `${sheetName}!${startLetter}${rowNumber}:${endLetter}${rowNumber}`,
     valueInputOption: "USER_ENTERED",
     requestBody: { values: [row] }
@@ -128,11 +143,11 @@ async function updateRowRange(sheetName: string, rowIndex: number, startCol: num
 }
 
 async function appendRowRange(sheetName: string, endCol: number, row: string[]) {
-  const env = getEnv();
+  const sheetsEnv = getSheetsConfig();
   const sheets = google.sheets({ version: "v4", auth: getAuth() });
   const endLetter = columnIndexToLetter(endCol);
   await sheets.spreadsheets.values.append({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetsEnv.sheetId,
     range: `${sheetName}!A:${endLetter}`,
     valueInputOption: "USER_ENTERED",
     requestBody: { values: [row] }
@@ -140,9 +155,9 @@ async function appendRowRange(sheetName: string, endCol: number, row: string[]) 
 }
 
 async function getSheetId(sheetName: string) {
-  const env = getEnv();
+  const sheetsEnv = getSheetsConfig();
   const sheets = google.sheets({ version: "v4", auth: getAuth() });
-  const res = await sheets.spreadsheets.get({ spreadsheetId: env.GOOGLE_SHEET_ID });
+  const res = await sheets.spreadsheets.get({ spreadsheetId: sheetsEnv.sheetId });
   const target = normalizeSheetName(sheetName);
   const sheet = res.data.sheets?.find(
     (s) => normalizeSheetName(s.properties?.title ?? "") === target
@@ -155,7 +170,7 @@ async function getSheetId(sheetName: string) {
 }
 
 export async function sortSheetByDate(sheetName: string) {
-  const env = getEnv();
+  const sheetsEnv = getSheetsConfig();
   const sheets = google.sheets({ version: "v4", auth: getAuth() });
   const values = await getSheetValues(sheetName);
   if (values.length <= 2) return;
@@ -163,7 +178,7 @@ export async function sortSheetByDate(sheetName: string) {
   const rowCount = values.length;
   const colCount = values[0]?.length ?? 1;
   await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetsEnv.sheetId,
     requestBody: {
       requests: [
         {
@@ -184,11 +199,11 @@ export async function sortSheetByDate(sheetName: string) {
 }
 
 async function copyFormulaRange(sheetName: string, sourceRow: number, targetRow: number, startCol: number, endCol: number) {
-  const env = getEnv();
+  const sheetsEnv = getSheetsConfig();
   const sheets = google.sheets({ version: "v4", auth: getAuth() });
   const sheetId = await getSheetId(sheetName);
   await sheets.spreadsheets.batchUpdate({
-    spreadsheetId: env.GOOGLE_SHEET_ID,
+    spreadsheetId: sheetsEnv.sheetId,
     requestBody: {
       requests: [
         {
@@ -390,12 +405,12 @@ export async function syncZScoreDatesFromData() {
   }
 
   if (neededRows > 0) {
-    const env = getEnv();
+    const sheetsEnv = getSheetsConfig();
     const sheets = google.sheets({ version: "v4", auth: getAuth() });
     const colLetter = columnIndexToLetter(zDateCol);
     const endRow = neededRows + 1;
     await sheets.spreadsheets.values.update({
-      spreadsheetId: env.GOOGLE_SHEET_ID,
+      spreadsheetId: sheetsEnv.sheetId,
       range: `zscores!${colLetter}2:${colLetter}${endRow}`,
       valueInputOption: "USER_ENTERED",
       requestBody: { values: desiredDates.map((date) => [date]) }

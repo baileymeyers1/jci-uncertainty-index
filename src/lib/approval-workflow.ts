@@ -24,6 +24,10 @@ export interface ApprovalRow {
     name: string | null;
   } | null;
   nextExpectedReleaseDate: string | null;
+  releaseDateConfidence: "OFFICIAL" | "ESTIMATED" | null;
+  releaseDateEvidenceUrl: string | null;
+  releaseDateEvidenceNote: string | null;
+  releaseDateLastResearchedAt: string | null;
   dueState: DueState;
   dueLabel: string;
 }
@@ -121,6 +125,10 @@ export async function getApprovalSnapshotForMonth(month: string): Promise<Approv
           }
         : null,
       nextExpectedReleaseDate: schedule?.nextExpectedReleaseDate?.toISOString() ?? null,
+      releaseDateConfidence: schedule?.confidence ?? null,
+      releaseDateEvidenceUrl: schedule?.evidenceUrl ?? null,
+      releaseDateEvidenceNote: schedule?.evidenceNote ?? null,
+      releaseDateLastResearchedAt: schedule?.lastResearchedAt?.toISOString() ?? null,
       dueState: due.dueState,
       dueLabel: due.dueLabel
     };

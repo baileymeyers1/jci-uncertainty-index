@@ -33,8 +33,9 @@ Official source URLs and current adapter status. Update and add parsing notes as
   - Source: https://www.deloitte.com/us/en/insights/topics/leadership/cfo-survey-data-dashboard.html
   - Adapter: HTML scrape (CFO confidence value)
 - Economic Policy Uncertainty Index (month average)
-  - Source: https://fred.stlouisfed.org/series/USEPUINDXD
-  - Adapter: FRED daily series averaged across target month
+  - Source: https://www.policyuncertainty.com/us_monthly.html
+  - Download: https://www.policyuncertainty.com/media/US_Policy_Uncertainty_Data.xlsx
+  - Adapter: Excel parse of Main News Index sheet (`News_Based_Policy_Uncert_Index`) for prior published month
 - NFIB Uncertainty Index
   - Source: https://www.nfib.com/news/monthly_report/sbet/
   - Adapter: HTML scrape (Uncertainty Index)

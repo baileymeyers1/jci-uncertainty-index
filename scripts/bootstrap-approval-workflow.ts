@@ -1,45 +1,33 @@
 import { PrismaClient } from "@prisma/client";
-import { addMonths } from "date-fns";
+import {
+  RELEASE_SCHEDULE_RESEARCHED_AT,
+  RELEASE_SCHEDULE_SEED_ROWS
+} from "./release-schedule-seed-data";
 
 const prisma = new PrismaClient();
 
-const sourceScheduleSeed: Array<{ sourceName: string; frequency: "monthly" | "quarterly" | "daily" }> = [
-  { sourceName: "University of Michigan Consumer Sentiment", frequency: "monthly" },
-  { sourceName: "Conference Board Consumer Confidence", frequency: "monthly" },
-  { sourceName: "NY Fed Consumer Expectations - Inflation", frequency: "monthly" },
-  { sourceName: "Duke/Fed CFO Survey Optimism - Economy", frequency: "quarterly" },
-  { sourceName: "NFIB Small Business Optimism", frequency: "monthly" },
-  { sourceName: "Business Roundtable CEO Outlook", frequency: "quarterly" },
-  { sourceName: "Duke/Fed CFO Survey Optimism - Own Firm", frequency: "quarterly" },
-  { sourceName: "EY-Parthenon CEO Confidence", frequency: "quarterly" },
-  { sourceName: "Deloitte CFO Confidence", frequency: "quarterly" },
-  { sourceName: "Economic Policy Uncertainty Index (month average)", frequency: "daily" },
-  { sourceName: "NFIB Uncertainty Index", frequency: "monthly" },
-  { sourceName: "Atlanta Fed SBU Empgrowth Uncert", frequency: "monthly" },
-  { sourceName: "Atlanta Fed SBU RevGrowth Uncert", frequency: "monthly" },
-  { sourceName: "OECD Composite Consumer Confidence for United States", frequency: "monthly" }
-];
-
-function resolveAdvanceMonths(frequency: string) {
-  if (frequency === "quarterly") return 3;
-  return 1;
-}
-
 async function seedSourceSchedules() {
-  const now = new Date();
-  for (const source of sourceScheduleSeed) {
-    const advanceMonths = resolveAdvanceMonths(source.frequency);
-    const nextExpectedReleaseDate = addMonths(now, advanceMonths);
+  const researchedAt = new Date(RELEASE_SCHEDULE_RESEARCHED_AT);
+
+  for (const row of RELEASE_SCHEDULE_SEED_ROWS) {
     await prisma.sourceReleaseSchedule.upsert({
-      where: { sourceName: source.sourceName },
+      where: { sourceName: row.sourceName },
       update: {
-        advanceMonths,
-        nextExpectedReleaseDate
+        advanceMonths: row.advanceMonths,
+        nextExpectedReleaseDate: new Date(row.nextExpectedReleaseDate),
+        confidence: row.confidence,
+        evidenceUrl: row.evidenceUrl,
+        evidenceNote: row.evidenceNote ?? null,
+        lastResearchedAt: researchedAt
       },
       create: {
-        sourceName: source.sourceName,
-        advanceMonths,
-        nextExpectedReleaseDate
+        sourceName: row.sourceName,
+        advanceMonths: row.advanceMonths,
+        nextExpectedReleaseDate: new Date(row.nextExpectedReleaseDate),
+        confidence: row.confidence,
+        evidenceUrl: row.evidenceUrl,
+        evidenceNote: row.evidenceNote ?? null,
+        lastResearchedAt: researchedAt
       }
     });
   }

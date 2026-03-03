@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { formatMonthLabel } from "@/lib/sheets";
+import { formatMonthLabel } from "@/lib/month";
 import { getApprovalSnapshotForMonth } from "@/lib/approval-workflow";
 import { requireSession, unauthorized } from "@/lib/auth-guard";
 

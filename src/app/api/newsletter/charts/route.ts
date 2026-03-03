@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getOverviewData } from "@/lib/sheets";
+import { getOverviewData } from "@/lib/analytics";
 import { buildSparklineChartSvg, buildTrendChartSvg } from "@/lib/newsletter/charts";
 import { parse, isValid } from "date-fns";
 import path from "path";

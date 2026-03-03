@@ -25,6 +25,11 @@ enum ApprovalStatus {
   REJECTED
 }
 
+enum ReleaseDateConfidence {
+  OFFICIAL
+  ESTIMATED
+}
+
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -186,6 +191,21 @@ model SourceReleaseSchedule {
   sourceName              String   @unique
   advanceMonths           Int      @default(1)
   nextExpectedReleaseDate DateTime
+  confidence              ReleaseDateConfidence @default(OFFICIAL)
+  evidenceUrl             String?
+  evidenceNote            String?
+  lastResearchedAt        DateTime?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
+}
+
+model SurveyMeta {
+  id         String   @id @default(cuid())
+  sourceName String   @unique
+  mean       Float?
+  stdev      Float?
+  direction  Float?   @default(1)
+  weight     Float?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }

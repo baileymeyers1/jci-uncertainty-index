@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { surveyAdapters } from "@/lib/ingest/adapters/sources";
-import { patchMonthlyRowPartial, sortSheetByDate, syncZScoreDatesFromData } from "@/lib/sheets";
 import { requireSession, unauthorized } from "@/lib/auth-guard";
 
 type ApprovalAction = "approve" | "reject" | "edit";
@@ -46,18 +44,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "value must be numeric" }, { status: 400 });
     }
 
-    const adapter = surveyAdapters.find((entry) => entry.name === sourceValue.sourceName);
-    const sheetHeader = adapter?.sheetHeader ?? sourceValue.sourceName;
-    await patchMonthlyRowPartial({
-      sheetName: "Data",
-      dateLabel: sourceValue.ingestRun.month,
-      data: {
-        [sheetHeader]: nextValue
-      }
-    });
-    await syncZScoreDatesFromData();
-    await sortSheetByDate("Data");
-
     const updated = await prisma.sourceValue.update({
       where: { id: sourceValue.id },
       data: {
@@ -67,6 +53,7 @@ export async function POST(req: Request) {
             ? nextValue - sourceValue.previousValue
             : null,
         carriedForward: false,
+        status: "success",
         approvalStatus: "PENDING",
         approvedAt: null,
         approvedByUserId: null,

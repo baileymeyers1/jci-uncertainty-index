@@ -32,13 +32,22 @@ export async function sendMonthlyApprovalEmail(month: string) {
       const statusParts = [row.status];
       if (row.carriedForward) statusParts.push("Carried forward");
       if (row.approvalStatus !== "APPROVED") statusParts.push("Needs approval");
+      if (row.releaseDateConfidence === "ESTIMATED") statusParts.push("Estimated release date");
+      if (!row.releaseDateConfidence) statusParts.push("Release date not researched");
+      const releaseConfidenceLabel = row.releaseDateConfidence ?? "UNRESEARCHED";
+      const evidenceHtml = row.releaseDateEvidenceUrl
+        ? `<a href="${row.releaseDateEvidenceUrl}" target="_blank" rel="noreferrer">Evidence</a>`
+        : row.releaseDateEvidenceNote
+          ? escapeHtml(row.releaseDateEvidenceNote)
+          : "—";
       return `<tr>
   <td style="padding:8px;border:1px solid #ddd;font-weight:600;">${escapeHtml(row.sourceName)}</td>
   <td style="padding:8px;border:1px solid #ddd;">${formatNumeric(row.value)}</td>
   <td style="padding:8px;border:1px solid #ddd;">${formatNumeric(row.previousValue)}</td>
   <td style="padding:8px;border:1px solid #ddd;">${formatNumeric(row.delta)}</td>
   <td style="padding:8px;border:1px solid #ddd;">${escapeHtml(statusParts.join(" · "))}</td>
-  <td style="padding:8px;border:1px solid #ddd;">${escapeHtml(row.dueLabel)}</td>
+  <td style="padding:8px;border:1px solid #ddd;">${escapeHtml(row.dueLabel)} (${releaseConfidenceLabel})</td>
+  <td style="padding:8px;border:1px solid #ddd;">${evidenceHtml}</td>
   <td style="padding:8px;border:1px solid #ddd;"><a href="${row.sourceUrl}" target="_blank" rel="noreferrer">Source</a></td>
 </tr>`;
     })
@@ -59,6 +68,7 @@ export async function sendMonthlyApprovalEmail(month: string) {
           <th style="text-align:left;padding:8px;border:1px solid #ddd;">Delta</th>
           <th style="text-align:left;padding:8px;border:1px solid #ddd;">Status</th>
           <th style="text-align:left;padding:8px;border:1px solid #ddd;">Expected Release</th>
+          <th style="text-align:left;padding:8px;border:1px solid #ddd;">Release Evidence</th>
           <th style="text-align:left;padding:8px;border:1px solid #ddd;">Link</th>
         </tr>
       </thead>

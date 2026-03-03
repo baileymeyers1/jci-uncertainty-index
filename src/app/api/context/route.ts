@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { formatMonthLabel } from "@/lib/sheets";
+import { formatMonthLabel } from "@/lib/month";
 import { requireSession, unauthorized } from "@/lib/auth-guard";
 
 export async function POST(req: Request) {

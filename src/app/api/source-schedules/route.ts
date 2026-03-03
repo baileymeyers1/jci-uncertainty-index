@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { surveyAdapters } from "@/lib/ingest/adapters/sources";
 import { requireSession, unauthorized } from "@/lib/auth-guard";
+import { buildSourceScheduleResponseItem } from "@/lib/source-schedules";
 
-function defaultAdvanceMonths(frequency: string) {
-  return frequency === "quarterly" ? 3 : 1;
+function isValidConfidence(value: string) {
+  return value === "OFFICIAL" || value === "ESTIMATED";
 }
 
 export async function GET() {
@@ -14,20 +15,9 @@ export async function GET() {
   const schedules = await prisma.sourceReleaseSchedule.findMany();
   const scheduleMap = new Map(schedules.map((schedule) => [schedule.sourceName, schedule]));
 
-  const items = surveyAdapters.map((adapter) => {
-    const schedule = scheduleMap.get(adapter.name);
-    const advanceMonths = schedule?.advanceMonths ?? defaultAdvanceMonths(adapter.frequency);
-    const fallbackDate = new Date();
-    fallbackDate.setMonth(fallbackDate.getMonth() + advanceMonths);
-    return {
-      sourceName: adapter.name,
-      sourceUrl: adapter.sourceUrl,
-      frequency: adapter.frequency,
-      releaseCadence: adapter.releaseCadence,
-      advanceMonths,
-      nextExpectedReleaseDate: (schedule?.nextExpectedReleaseDate ?? fallbackDate).toISOString()
-    };
-  });
+  const items = surveyAdapters.map((adapter) =>
+    buildSourceScheduleResponseItem(adapter, scheduleMap.get(adapter.name))
+  );
 
   return NextResponse.json({ schedules: items });
 }
@@ -40,6 +30,9 @@ export async function POST(req: Request) {
   const sourceName = String(body?.sourceName ?? "").trim();
   const advanceMonths = Number(body?.advanceMonths);
   const nextExpectedReleaseDate = body?.nextExpectedReleaseDate ? new Date(body.nextExpectedReleaseDate) : null;
+  const confidenceRaw = String(body?.confidence ?? "OFFICIAL").trim().toUpperCase();
+  const evidenceUrl = body?.evidenceUrl ? String(body.evidenceUrl).trim() : null;
+  const evidenceNote = body?.evidenceNote ? String(body.evidenceNote).trim() : null;
 
   if (!sourceName || !Number.isFinite(advanceMonths) || advanceMonths < 1 || !nextExpectedReleaseDate) {
     return NextResponse.json(
@@ -52,6 +45,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid nextExpectedReleaseDate" }, { status: 400 });
   }
 
+  if (!isValidConfidence(confidenceRaw)) {
+    return NextResponse.json({ error: "confidence must be OFFICIAL or ESTIMATED" }, { status: 400 });
+  }
+  const confidence = confidenceRaw as "OFFICIAL" | "ESTIMATED";
+
+  if (confidence === "ESTIMATED" && !evidenceUrl) {
+    return NextResponse.json({ error: "evidenceUrl is required for estimated schedules" }, { status: 400 });
+  }
+
+  if (evidenceUrl) {
+    try {
+      new URL(evidenceUrl);
+    } catch {
+      return NextResponse.json({ error: "Invalid evidenceUrl" }, { status: 400 });
+    }
+  }
+
   const knownSource = surveyAdapters.some((adapter) => adapter.name === sourceName);
   if (!knownSource) {
     return NextResponse.json({ error: "Unknown sourceName" }, { status: 404 });
@@ -61,12 +71,20 @@ export async function POST(req: Request) {
     where: { sourceName },
     update: {
       advanceMonths,
-      nextExpectedReleaseDate
+      nextExpectedReleaseDate,
+      confidence,
+      evidenceUrl,
+      evidenceNote,
+      lastResearchedAt: new Date()
     },
     create: {
       sourceName,
       advanceMonths,
-      nextExpectedReleaseDate
+      nextExpectedReleaseDate,
+      confidence,
+      evidenceUrl,
+      evidenceNote,
+      lastResearchedAt: new Date()
     }
   });
 

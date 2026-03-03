@@ -1,24 +1,27 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getZScoresForMonths } from "@/lib/sheets";
+import { computeMetricsForSources, getMetaBySourceMap } from "@/lib/analytics";
 import { requireSession, unauthorized } from "@/lib/auth-guard";
 
 export async function GET() {
   const session = await requireSession();
   if (!session) return unauthorized();
 
-  const ingestRuns = await prisma.ingestRun.findMany({
-    orderBy: { startedAt: "desc" },
-    take: 5,
-    include: { sources: true }
-  });
-
-  const monthLabels = ingestRuns.map((run) => run.month);
-  const zscoreMap = await getZScoresForMonths(monthLabels);
+  const [ingestRuns, metaBySource] = await Promise.all([
+    prisma.ingestRun.findMany({
+      orderBy: { startedAt: "desc" },
+      take: 5,
+      include: { sources: true }
+    }),
+    getMetaBySourceMap()
+  ]);
 
   const runs = ingestRuns.map((run) => ({
     ...run,
-    zscores: zscoreMap.get(run.month) ?? {}
+    zscores: computeMetricsForSources(
+      run.sources.map((source) => ({ sourceName: source.sourceName, value: source.value })),
+      metaBySource
+    ).sourceZScores
   }));
 
   return NextResponse.json({ ingestRuns: runs });

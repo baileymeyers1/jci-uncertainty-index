@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getOverviewData } from "@/lib/sheets";
+import { getOverviewData } from "@/lib/analytics";
 import { surveyAdapters } from "@/lib/ingest/adapters/sources";
 import { requireSession, unauthorized } from "@/lib/auth-guard";
 
